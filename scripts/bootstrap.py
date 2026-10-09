@@ -9,6 +9,9 @@ root = Path(__file__).resolve().parent.parent
 config = json.loads((root / "upstream.json").read_text())
 parser = argparse.ArgumentParser()
 parser.add_argument("--upstream-ref", default=config["ref"])
+mode = parser.add_mutually_exclusive_group()
+mode.add_argument("--source-only", action="store_true")
+mode.add_argument("--dependencies-only", action="store_true")
 args = parser.parse_args()
 if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_./-]*", args.upstream_ref):
     parser.error("Use a Git commit, tag, or branch name.")
@@ -19,19 +22,23 @@ def run(*command, cwd=root):
 cache = root / ".cache"
 (cache / "downloads").mkdir(parents=True, exist_ok=True)
 (cache / "deps").mkdir(exist_ok=True)
-upstream = cache / "upstream"
-patch = root / "patches/browser-napi.patch"
-if not (upstream / ".git").exists():
-    run("git", "clone", "--no-checkout", "--filter=blob:none", config["repository"], str(upstream))
-else:
-    diff = subprocess.check_output(["git", "diff", "--name-only"], cwd=upstream, text=True).strip()
-    if diff:
-        run("git", "apply", "--reverse", "--check", str(patch), cwd=upstream)
-        run("git", "apply", "--reverse", str(patch), cwd=upstream)
-run("git", "fetch", "--depth=1", "origin", args.upstream_ref, cwd=upstream)
-run("git", "checkout", "--detach", "FETCH_HEAD", cwd=upstream)
-run("git", "apply", "--check", str(patch), cwd=upstream)
-run("git", "apply", str(patch), cwd=upstream)
+if not args.dependencies_only:
+    upstream = cache / "upstream"
+    patch = root / "patches/browser-napi.patch"
+    if not (upstream / ".git").exists():
+        run("git", "clone", "--no-checkout", "--filter=blob:none", config["repository"], str(upstream))
+    else:
+        diff = subprocess.check_output(["git", "diff", "--name-only"], cwd=upstream, text=True).strip()
+        if diff:
+            run("git", "apply", "--reverse", "--check", str(patch), cwd=upstream)
+            run("git", "apply", "--reverse", str(patch), cwd=upstream)
+    run("git", "fetch", "--depth=1", "origin", args.upstream_ref, cwd=upstream)
+    run("git", "checkout", "--detach", "FETCH_HEAD", cwd=upstream)
+    run("git", "apply", "--check", str(patch), cwd=upstream)
+    run("git", "apply", str(patch), cwd=upstream)
+
+if args.source_only:
+    raise SystemExit(0)
 
 emsdk = cache / "emsdk"
 if not (emsdk / ".git").exists():

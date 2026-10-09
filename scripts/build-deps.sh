@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source .cache/emsdk/emsdk_env.sh >/dev/null 2>&1
+source scripts/build-env.sh
 jobs="${BUILD_JOBS:-4}"
 emcmake cmake -S .cache/deps/fftw-3.3.10 -B .cache/build-fftw -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/.cache/fftw" \

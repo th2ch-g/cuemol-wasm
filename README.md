@@ -30,7 +30,7 @@ This uses CueMol's current Tritium interface, which differs from the legacy XUL 
 
 ## Build locally
 
-Requirements: Git, Node.js 24+, npm, uv, CMake, Ninja, Bison, Flex, and Clang. The scripts support Linux and macOS and obtain the pinned Emscripten SDK and native dependency sources.
+Requirements: Git, Node.js 24+, npm, uv, CMake, Ninja, Bison, Flex, and Clang. Install ccache to reuse C/C++ compilation results across local builds. The scripts support Linux and macOS and obtain the pinned Emscripten SDK and native dependency sources.
 
 ```sh
 npm ci
@@ -71,6 +71,8 @@ There are no scheduled or push-triggered deployments.
 2. Enter a CueMol branch, tag, or commit. The default `develop` resolves the latest upstream commit at the start of that run.
 3. The workflow builds the native engine and UI, tests them in three browser engines, and deploys the tested artifact to GitHub Pages.
 4. A separate job checks the published adapter commit, CueMol commit, and Wasm SHA-256, then runs the browser suite against the public URL.
+
+The workflow caches the compiled Wasm engine and generated TypeScript wrappers by CueMol commit, build configuration, compiler/dependency versions, and native patches. An exact match skips Emscripten setup and C++ compilation; build metadata and runtime data are still regenerated for the current adapter commit. Upstream changes reuse the SDK, downloaded sources, compiled dependency libraries, and ccache. npm downloads are cached by the lockfile. Browser tests and public-site verification always run, including on a cache hit. Cache expiration falls back to a complete build.
 
 A failed build or predeployment test leaves the current site in place. The workflow fails if the upstream patch no longer applies. Review compatibility changes before retrying an upstream update.
 

@@ -76,8 +76,15 @@ license_files = {
     "emnapi.txt": root / "node_modules/emnapi/LICENSE",
     "node-addon-api.txt": root / "node_modules/node-addon-api/LICENSE.md",
 }
+cached_licenses = root / "build/native-licenses"
+cached_licenses.mkdir(parents=True, exist_ok=True)
 for name, source in license_files.items():
-    shutil.copy2(source, licenses / name)
+    cached = cached_licenses / name
+    if source.exists():
+        shutil.copy2(source, cached)
+    if not cached.exists():
+        raise RuntimeError(f"Native license is missing: {name}")
+    shutil.copy2(cached, licenses / name)
 if (root / "THIRD_PARTY.md").exists():
     shutil.copy2(root / "THIRD_PARTY.md", public / "THIRD_PARTY.md")
 config = json.loads((root / "upstream.json").read_text())

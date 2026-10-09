@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 root_dir="$PWD"
 source .cache/emsdk/emsdk_env.sh >/dev/null 2>&1
+source scripts/build-env.sh
 if command -v brew >/dev/null; then
   export PATH="$(brew --prefix bison)/bin:$(brew --prefix flex)/bin:$PATH"
 fi

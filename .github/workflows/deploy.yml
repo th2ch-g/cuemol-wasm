@@ -36,19 +36,79 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake ninja-build bison flex clang
+          sudo apt-get install -y --no-install-recommends cmake ninja-build bison flex clang ccache
       - run: npm ci
-      - name: Resolve CueMol source and pinned dependencies
+      - name: Identify dependency cache keys
+        id: cache-keys
+        run: uv run --no-project --python 3.12 python scripts/cache-keys.py >> "$GITHUB_OUTPUT"
+      - name: Resolve CueMol source
         id: source
         env:
           UPSTREAM_REF: ${{ inputs.upstream_ref }}
         run: |
-          uv run --no-project --python 3.12 python scripts/bootstrap.py --upstream-ref "$UPSTREAM_REF"
+          uv run --no-project --python 3.12 python scripts/bootstrap.py --source-only --upstream-ref "$UPSTREAM_REF"
           printf 'upstream_sha=%s\n' "$(git -C .cache/upstream rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Restore compiled CueMol engine
+        id: engine-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            build/wasm
+            build/core/ts/wrappers
+            build/native-licenses
+          key: engine-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.source.outputs.upstream_sha }}-${{ hashFiles('upstream.json', 'package-lock.json', 'cmake/**', 'patches/**', 'src/native/**', 'scripts/build*.sh', 'scripts/bootstrap.py', 'scripts/stage-runtime.py') }}
+      - name: Restore Emscripten SDK
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .cache/emsdk
+          key: emsdk-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-keys.outputs.toolchain }}
+      - name: Restore native source archives
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .cache/downloads
+            .cache/deps
+          key: sources-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-keys.outputs.sources }}
+      - name: Restore compiled dependency libraries
+        id: library-cache
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .cache/fftw
+            .cache/xz
+            .cache/lcms
+          key: libraries-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-keys.outputs.toolchain }}-${{ steps.cache-keys.outputs.sources }}-${{ hashFiles('scripts/build-deps.sh', 'scripts/build-env.sh', 'cmake/lcms/**') }}
+      - name: Restore C++ compilation cache
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .cache/ccache
+          key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-keys.outputs.toolchain }}-${{ steps.source.outputs.upstream_sha }}-${{ hashFiles('upstream.json', 'package-lock.json', 'cmake/**', 'patches/**', 'src/native/**', 'scripts/build*.sh') }}
+          restore-keys: |
+            ccache-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-keys.outputs.toolchain }}-
+      - name: Prepare native dependencies
+        if: steps.engine-cache.outputs.cache-hit != 'true'
+        run: uv run --no-project --python 3.12 python scripts/bootstrap.py --dependencies-only
       - name: Build dependencies
+        if: steps.engine-cache.outputs.cache-hit != 'true' && steps.library-cache.outputs.cache-hit != 'true'
         run: bash scripts/build-deps.sh
       - name: Build CueMol WebAssembly
+        if: steps.engine-cache.outputs.cache-hit != 'true'
         run: bash scripts/build-wasm.sh
+      - name: Refresh cached engine metadata and runtime data
+        if: steps.engine-cache.outputs.cache-hit == 'true'
+        run: uv run --no-project --python 3.12 python scripts/stage-runtime.py
+      - name: Report native cache usage
+        env:
+          ENGINE_CACHE_HIT: ${{ steps.engine-cache.outputs.cache-hit }}
+        run: |
+          printf 'Compiled CueMol engine cache hit: `%s`\n' "$ENGINE_CACHE_HIT" >> "$GITHUB_STEP_SUMMARY"
+          if [ -d .cache/ccache ]; then
+            CCACHE_DIR="$PWD/.cache/ccache" ccache --show-stats >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Build browser application
         run: npm run build
       - name: Install test browsers
