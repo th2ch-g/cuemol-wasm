@@ -63,7 +63,7 @@ npm run test:e2e
 
 The tests serve the production build without COOP/COEP server headers, exercising the same service-worker isolation used on GitHub Pages. They check actual native parsing and rendering, PNG pixel data, camera interaction, context menus, selections, undo/redo, compressed QSC download and reload, browser persistence, molecule copy/paste, atom picking and distance labels, RCSB downloads, CCP4 maps, DCD frames, and video downloads.
 
-To test a deployed build, set `BASE_URL` to its application URL. Playwright reports, exported images, and failure traces are retained as workflow artifacts.
+To test a deployed build, set `BASE_URL` to its application URL. Reports, exported images, and failure traces are written locally. Browser tests run outside GitHub Actions to conserve Actions minutes.
 
 ## Update and deploy
 
@@ -71,12 +71,12 @@ There are no scheduled or push-triggered deployments.
 
 1. Open **Actions → Build and deploy CueMol Wasm → Run workflow**.
 2. Enter a CueMol branch, tag, or commit. The default `develop` resolves the latest upstream commit at the start of that run.
-3. The workflow builds the native engine and UI, tests them in three browser engines, and deploys the tested artifact to GitHub Pages.
-4. A separate job checks the published adapter commit, CueMol commit, and Wasm SHA-256, then runs the browser suite against the public URL.
+3. The workflow builds the native engine and UI and deploys the artifact to GitHub Pages. It does not install test browsers or run tests.
+4. Run `node scripts/check-deployment.mjs` and `npm run test:e2e` locally with `BASE_URL` set to the published application URL. Set `EXPECTED_COMMIT` and `EXPECTED_UPSTREAM` when checking a specific deployment.
 
-The workflow caches the compiled Wasm engine and generated TypeScript wrappers by CueMol commit, build configuration, compiler/dependency versions, and native patches. An exact match skips Emscripten setup and C++ compilation; build metadata and runtime data are still regenerated for the current adapter commit. Upstream changes reuse the SDK, downloaded sources, compiled dependency libraries, and ccache. npm downloads are cached by the lockfile. Browser tests and public-site verification always run, including on a cache hit. Cache expiration falls back to a complete build.
+The workflow caches the compiled Wasm engine and generated TypeScript wrappers by CueMol commit, build configuration, compiler/dependency versions, and native patches. An exact match skips Emscripten setup and C++ compilation; build metadata and runtime data are still regenerated for the current adapter commit. Upstream changes reuse the SDK, downloaded sources, compiled dependency libraries, and ccache. npm downloads are cached by the lockfile. Cache expiration falls back to a complete build.
 
-A failed build or predeployment test leaves the current site in place. The workflow fails if the upstream patch no longer applies. Review compatibility changes before retrying an upstream update.
+A failed build leaves the current site in place. The workflow fails if the upstream patch no longer applies. Review compatibility changes before retrying an upstream update.
 
 [version.json](https://th2ch-g.github.io/cuemol-wasm/version.json) identifies the deployed commits and native binary. [source.json](https://th2ch-g.github.io/cuemol-wasm/source.json) provides the exact source archives and dependency checksums. Native binaries and runtime data use content-addressed URLs to avoid mixing old and new files across updates.
 
