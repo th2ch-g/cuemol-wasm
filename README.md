@@ -50,6 +50,8 @@ bash scripts/build-wasm.sh
 npm run build
 ```
 
+SDK and dependency downloads run concurrently. Native compilation uses the available CPU count with a memory limit of approximately 2 GiB per compiler process; set `BUILD_JOBS` to override it. The three browser engines run concurrently; set `PLAYWRIGHT_WORKERS=1` on a memory-constrained machine.
+
 Generated source checkouts, compiler downloads, binaries, runtime assets, and test output are ignored by Git. Do not edit `public/`, `build/`, or `.cache/` as project source. The deployment base path can be set with `BASE_PATH`; its default is `/cuemol-wasm/`.
 
 ## Verify

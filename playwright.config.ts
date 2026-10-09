@@ -6,7 +6,7 @@ export default defineConfig({
   timeout: 120000,
   expect: { timeout: 20000 },
   fullyParallel: false,
-  workers: 1,
+  workers: Number(process.env.PLAYWRIGHT_WORKERS || 3),
   retries: process.env.CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   projects: ['chromium', 'firefox', 'webkit'].map(name => ({ name, use: { browserName: name as 'chromium' | 'firefox' | 'webkit', launchOptions: name === 'chromium' ? { args: ['--enable-unsafe-swiftshader'] } : {} } })),
