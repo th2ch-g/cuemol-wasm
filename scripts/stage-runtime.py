@@ -45,12 +45,16 @@ shutil.copytree(runtime, runtime_target)
 (runtime_target / "manifest.json").write_text(json.dumps({"files": files}) + "\n")
 
 wasm_hash = hashlib.sha256((root / "build/wasm/cuemol.wasm").read_bytes()).hexdigest()
-wasm_base = "wasm/" + wasm_hash[:16] + "/"
+native_files = sorted(path for path in (root / "build/wasm").iterdir() if path.is_file())
+native_hash = hashlib.sha256()
+for source in native_files:
+    native_hash.update(source.name.encode() + b"\0")
+    native_hash.update(source.read_bytes())
+wasm_base = "wasm/" + native_hash.hexdigest()[:16] + "/"
 wasm = public / wasm_base
 wasm.mkdir(parents=True)
-for source in (root / "build/wasm").iterdir():
-    if source.is_file():
-        shutil.copy2(source, wasm / source.name)
+for source in native_files:
+    shutil.copy2(source, wasm / source.name)
 shutil.copy2(root / "node_modules/coi-serviceworker/coi-serviceworker.js", public / "coi-serviceworker.js")
 sha = subprocess.check_output(["git", "-C", str(upstream), "rev-parse", "HEAD"], text=True).strip()
 integration = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()

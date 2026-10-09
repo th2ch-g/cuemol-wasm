@@ -56,7 +56,7 @@ jobs:
             build/wasm
             build/core/ts/wrappers
             build/native-licenses
-          key: engine-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.source.outputs.upstream_sha }}-${{ steps.cache-keys.outputs.bindings }}-${{ hashFiles('upstream.json', 'cmake/**', 'patches/**', 'src/native/**', 'scripts/build*.sh', 'scripts/bootstrap.py', 'scripts/stage-runtime.py') }}
+          key: engine-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.source.outputs.upstream_sha }}-${{ steps.cache-keys.outputs.bindings }}-${{ hashFiles('upstream.json', 'cmake/**', 'patches/**', 'src/native/**', 'scripts/build*.sh') }}
       - name: Restore Emscripten SDK
         if: steps.engine-cache.outputs.cache-hit != 'true'
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
