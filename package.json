@@ -1,0 +1,49 @@
+{
+  "name": "cuemol-wasm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:e2e": "playwright test",
+    "pretest:e2e": "uv run --no-project --python 3.12 python scripts/generate-fixtures.py"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.53",
+    "@ai-sdk/google": "4.0.70",
+    "@ai-sdk/openai": "4.0.66",
+    "@blueprintjs/core": "5.13.0",
+    "@blueprintjs/icons": "5.13.0",
+    "@emnapi/runtime": "1.11.3",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@phosphor-icons/react": "2.1.10",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@use-gesture/react": "10.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "ai": "7.0.99",
+    "allotment": "1.20.2",
+    "buffer": "6.0.3",
+    "coi-serviceworker": "0.1.7",
+    "fflate": "^0.8.2",
+    "path-browserify": "1.0.1",
+    "react": "18.3.1",
+    "react-complex-tree": "2.3.3",
+    "react-dom": "18.3.1",
+    "react-tabs": "6.0.2",
+    "typescript": "5.7.2",
+    "vite": "6.4.3",
+    "zod": "4.6.2"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "1.0.1",
+    "@playwright/test": "1.64.0",
+    "@types/node": "24.10.1",
+    "@types/pngjs": "^6.0.5",
+    "emnapi": "1.11.3",
+    "node-addon-api": "8.6.0",
+    "pngjs": "^7.0.0"
+  }
+}

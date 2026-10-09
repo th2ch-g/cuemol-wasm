@@ -1,0 +1,8 @@
+set(CGAL_FOUND TRUE)
+set(CGAL_INCLUDE_DIRS "${CUEMOL_WASM_ROOT}/.cache/deps/CGAL-6.1/include")
+if(NOT TARGET CGAL::CGAL)
+  add_library(cuemol_cgal INTERFACE)
+  target_include_directories(cuemol_cgal INTERFACE "${CGAL_INCLUDE_DIRS}" "${Boost_INCLUDE_DIRS}")
+  target_compile_definitions(cuemol_cgal INTERFACE CGAL_DISABLE_GMP=1 CGAL_HAS_NO_THREADS=1 CGAL_DISABLE_ROUNDING_MATH_CHECK=1)
+  add_library(CGAL::CGAL ALIAS cuemol_cgal)
+endif()

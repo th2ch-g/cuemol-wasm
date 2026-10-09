@@ -1,0 +1,133 @@
+name: Build and deploy CueMol Wasm
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: CueMol branch, tag, or commit to build
+        required: true
+        default: develop
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      upstream_sha: ${{ steps.source.outputs.upstream_sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build bison flex clang
+      - run: npm ci
+      - name: Resolve CueMol source and pinned dependencies
+        id: source
+        env:
+          UPSTREAM_REF: ${{ inputs.upstream_ref }}
+        run: |
+          uv run --no-project --python 3.12 python scripts/bootstrap.py --upstream-ref "$UPSTREAM_REF"
+          printf 'upstream_sha=%s\n' "$(git -C .cache/upstream rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Build dependencies
+        run: bash scripts/build-deps.sh
+      - name: Build CueMol WebAssembly
+        run: bash scripts/build-wasm.sh
+      - name: Build browser application
+        run: npm run build
+      - name: Install test browsers
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Test browser operations without custom server headers
+        run: npm run test:e2e
+      - name: Preserve browser verification
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-verification
+          path: |
+            playwright-report
+            test-results
+            public/version.json
+          retention-days: 14
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Deploy tested artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  verify-live:
+    needs: [build, deploy]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: CueMol/cuemol2
+          ref: ${{ needs.build.outputs.upstream_sha }}
+          path: .cache/upstream
+          sparse-checkout: tests/test_data
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - name: Verify deployed commit and native binary
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.page_url }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_UPSTREAM: ${{ needs.build.outputs.upstream_sha }}
+        run: node scripts/check-deployment.mjs
+      - name: Exercise the public site
+        env:
+          BASE_URL: ${{ needs.deploy.outputs.page_url }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: npm run test:e2e
+      - name: Preserve live verification
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: live-browser-verification
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14

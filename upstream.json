@@ -1,0 +1,41 @@
+{
+  "repository": "https://github.com/CueMol/cuemol2.git",
+  "ref": "167dd81019bf6b8928e9c9e0d99009dfcf17b986",
+  "emsdk": "4.0.23",
+  "boost": "1.84.0",
+  "cgal": "6.1",
+  "updateRef": "develop",
+  "emsdkCommit": "35ff8a6d150541276abbc6bae512ca90bcfbe220",
+  "archives": [
+    {
+      "file": "boost.tar.bz2",
+      "directory": "boost_1_84_0",
+      "url": "https://archives.boost.io/release/1.84.0/source/boost_1_84_0.tar.bz2",
+      "sha256": "cc4b893acf645c9d4b698e9a0f08ca8846aa5d6c68275c14c3e7949c24109454"
+    },
+    {
+      "file": "cgal.tar.xz",
+      "directory": "CGAL-6.1",
+      "url": "https://github.com/CGAL/cgal/releases/download/v6.1/CGAL-6.1.tar.xz",
+      "sha256": "618da8a8b3f5be46b4f0a47a1efb3c9e6c03d6aab0f5531d56d355d32701d79f"
+    },
+    {
+      "file": "fftw.tar.gz",
+      "directory": "fftw-3.3.10",
+      "url": "https://www.fftw.org/fftw-3.3.10.tar.gz",
+      "sha256": "56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467"
+    },
+    {
+      "file": "xz.tar.gz",
+      "directory": "xz-5.8.1",
+      "url": "https://github.com/tukaani-project/xz/releases/download/v5.8.1/xz-5.8.1.tar.gz",
+      "sha256": "507825b599356c10dca1cd720c9d0d0c9d5400b9de300af00e4d1ea150795543"
+    },
+    {
+      "file": "lcms.tar.gz",
+      "directory": "Little-CMS-lcms2.17",
+      "url": "https://github.com/mm2/Little-CMS/archive/refs/tags/lcms2.17.tar.gz",
+      "sha256": "6e6f6411db50e85ae8ff7777f01b2da0614aac13b7b9fcbea66dc56a1bc71418"
+    }
+  ]
+}
