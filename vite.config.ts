@@ -38,12 +38,45 @@ function browserAdapter() {
       if (id.endsWith('/worker/server/gfx_manager.ts')) return adapt(code, id, [
         ["canvas.getContext('webgl2', { antialias: false })", "canvas.getContext('webgl2', { antialias: false, stencil: true })"],
       ]);
+      if (id.endsWith('/features/molview/MolViewPane.tsx')) return adapt(code, id, [
+        ["import React,", "import { useTouchInput } from " + JSON.stringify(resolve(root, 'src/browser/touch-input.ts')) + ";\nimport React,"],
+        ["useEffect(() => { cmRef.current = cm }, [cm])", "useEffect(() => { cmRef.current = cm }, [cm])\n  useTouchInput(canvasRef, cmRef, getActiveViewIdRef)"],
+      ]);
+      if (id.endsWith('/features/molview/RectSelectOverlay.tsx')) return adapt(code, id, [
+        ['import React,', 'import { useTouchMouseDrag } from ' + JSON.stringify(resolve(root, 'src/browser/touch-input.ts')) + ';\nimport React,'],
+        ['const rootRef = useRef<HTMLDivElement>(null)', 'const rootRef = useRef<HTMLDivElement>(null)\n    useTouchMouseDrag(rootRef)'],
+      ]);
+      if (id.endsWith('/shell/MainLayout.tsx')) return adapt(code, id, [
+        ["import React,", "import { useMobileLayout, MobilePanelBar } from " + JSON.stringify(resolve(root, 'src/browser/mobile-layout.tsx')) + ";\nimport React,"],
+        ["const { loaded, inspectorOpen, savedSizes } = useLayout()", "const mobile = useMobileLayout()\n  const { loaded, inspectorOpen, savedSizes } = useLayout()"],
+        ['<div className="main-layout">', '<div className="main-layout" data-mobile-panel={mobile.compact ? mobile.panel : undefined}>\n      <MobilePanelBar layout={mobile} hasTarget={inspectorHasTarget} />'],
+        ['onChange={handleMainSizesChange}', 'onChange={mobile.compact ? undefined : handleMainSizesChange}'],
+        ['onChange={handleRightPanelSizesChange}', 'onChange={mobile.compact ? undefined : handleRightPanelSizesChange}'],
+        ['onChange={setCenterSizes}', 'onChange={mobile.compact ? undefined : setCenterSizes}'],
+        ['visible={activeView !== null}', "visible={mobile.compact ? mobile.panel === 'tools' : activeView !== null}"],
+        ['{/* Right section: center + inspector */}\n              <Allotment.Pane>', '{/* Right section: center + inspector */}\n              <Allotment.Pane visible={!mobile.compact || mobile.panel !== "tools"}>'],
+        ['{/* Center: ContentArea + BottomPanel (vertical split) */}\n                  <Allotment.Pane>', '{/* Center: ContentArea + BottomPanel (vertical split) */}\n                  <Allotment.Pane visible={!mobile.compact || mobile.panel !== "properties"}>'],
+        ['<Allotment.Pane>\n                        <ContentArea />', '<Allotment.Pane visible={!mobile.compact || mobile.panel !== "console"}>\n                        <ContentArea />'],
+        ['<Allotment.Pane minSize={100} preferredSize={200} snap>', '<Allotment.Pane minSize={100} preferredSize={200} snap visible={!mobile.compact || mobile.panel === "console"}>'],
+        ['visible={inspectorOpen && inspectorHasTarget}', 'visible={mobile.compact ? mobile.panel === "properties" : inspectorOpen && inspectorHasTarget}'],
+      ]);
+      if (id.endsWith('/shell/menu/MenuPanel.tsx')) return adapt(code, id, [
+        ['import React,', 'import { isTouchInteraction } from ' + JSON.stringify(resolve(root, 'src/browser/touch-menus.ts')) + ';\nimport React,'],
+        ['onMouseEnter={() => { if (enabled) setOpen(true) }}', 'onClick={(event) => { event.stopPropagation(); if (enabled) setOpen(true) }}\n      onMouseEnter={() => { if (enabled && !isTouchInteraction()) setOpen(true) }}'],
+        ['onMouseLeave={() => setOpen(false)}', 'onMouseLeave={() => { if (!isTouchInteraction()) setOpen(false) }}'],
+      ]);
       if (id.endsWith('/shell/Toolbar.tsx')) return adapt(code, id, [
         ['text: "Save As"', 'text: "Save Object"'],
       ]);
       if (id === resolve(upstream, 'react-gui/src/plugins/index.ts')) return readFileSync(resolve(root, 'src/browser/plugins.ts'), 'utf8');
       if (id.endsWith('/commands/useRenderCommands.ts')) return readFileSync(resolve(root, 'src/browser/render-commands.ts'), 'utf8').replace("'./recording'", JSON.stringify(resolve(root, 'src/browser/recording.ts')));
       if (id.endsWith('/features/render/renderwindow/RenderWindowApp.tsx')) return adapt(code, id, [
+        ['import React,', 'import { useMobileLayout } from ' + JSON.stringify(resolve(root, 'src/browser/mobile-layout.tsx')) + ';\nimport React,'],
+        ['const client = useRenderWindowClient();', 'const mobile = useMobileLayout();\n  const client = useRenderWindowClient();'],
+        ['<div className="render-window-body">', '<div className="mobile-render-tabs" hidden={!mobile.compact}><button type="button" aria-pressed={mobile.panel !== "tools"} onClick={() => mobile.setPanel("model")}>Preview</button><button type="button" aria-pressed={mobile.panel === "tools"} onClick={() => mobile.setPanel("tools")}>Settings</button></div>\n      <div className="render-window-body">'],
+        ['<Allotment.Pane minSize={320}>', '<Allotment.Pane minSize={mobile.compact ? 0 : 320} visible={!mobile.compact || mobile.panel !== "tools"}>'],
+        ['<Allotment.Pane minSize={150} preferredSize={300}>', '<Allotment.Pane minSize={mobile.compact ? 0 : 150} preferredSize={300} visible={!mobile.compact || mobile.panel === "tools"}>'],
+
         ['? RENDER_BACKEND_IDS', '? RENDER_BACKEND_IDS.filter(id => id !== "povray")'],
         ['const canRender = client.target !== null;', 'const canRender = client.target !== null && sync.loaded && !sync.loading;'],
       ]);

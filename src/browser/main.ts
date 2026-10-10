@@ -1,5 +1,7 @@
 import { installBrowserHost } from './host';
 import './browser.css';
+import { installTouchMenus } from './touch-menus';
+installTouchMenus();
 installBrowserHost();
 try {
   if (!isSecureContext) throw new Error('Open CueMol over HTTPS or localhost.');

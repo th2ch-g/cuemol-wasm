@@ -15,3 +15,54 @@ html,body,#root{width:100%;height:100%;overflow:hidden}button,a,input,select{tou
 .wasm-render-window::backdrop { background: #0007; }
 .wasm-render-window > button { display: block; margin: 0 0 8px auto; padding: 5px 10px; border: 1px solid #62758a; border-radius: 4px; background: #343c49; color: inherit; cursor: pointer; }
 .wasm-render-window > iframe { display: block; width: 100%; height: calc(100% - 38px); border: 0; }
+
+canvas[data-molview-canvas], .rectsel-overlay.active { touch-action: none; user-select: none; -webkit-user-select: none; }
+.mobile-panel-bar { flex: 0 0 auto; background: var(--bg-base); border-bottom: 1px solid var(--border); }
+.mobile-panel-bar nav { display: flex; padding: 3px 6px; gap: 4px; }
+.mobile-panel-bar button { flex: 1; min-height: 40px; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text-strong); font: inherit; }
+.mobile-panel-bar button[aria-pressed="true"] { background: var(--bg-hover); border-color: var(--accent-blue, #6697ed); }
+.mobile-panel-bar button:disabled { opacity: .4; }
+.mobile-gesture-hint { padding: 2px 6px 6px; color: var(--text-secondary); font-size: 11px; text-align: center; }
+.main-layout[data-mobile-panel] { display: flex; flex-direction: column; }
+.main-layout[data-mobile-panel] .main-layout-inner { flex: 1; min-height: 0; }
+.main-layout[data-mobile-panel]:not([data-mobile-panel="tools"]) .activity-bar { display: none; }
+
+@media (max-width: 760px), (max-width: 1100px) and (pointer: coarse) {
+  html, body, #root { height: 100dvh; overscroll-behavior: none; }
+  .app { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); box-sizing: border-box; }
+  .app .menubar { height: 42px; padding-right: 0; overflow-x: auto; overflow-y: hidden; }
+  .app .menubar__item { flex-shrink: 0; padding: 0 12px; font-size: 14px; }
+  .app .menubar__app-icon { display: none; }
+  .app .menubar__dropdown { left: 6px !important; right: 6px; top: calc(44px + env(safe-area-inset-top)); max-height: calc(100dvh - 60px); overflow-y: auto; }
+  .app .app-toolbar-wrap { overflow-x: auto; overflow-y: hidden; }
+  .app .app-toolbar { height: 44px !important; min-height: 44px !important; padding: 0 4px !important; }
+  .app .app-toolbar .bp5-navbar-group { height: 44px; max-width: none; }
+  .app .app-toolbar .bp5-button { min-width: 40px; min-height: 40px !important; padding: 6px !important; }
+  .app .app-toolbar .bp5-divider { margin: 0 3px; }
+  .bp5-portal:has(.bp5-tooltip) { display: none; }
+  .app .viewport-tool-palette { max-height: calc(100% - 16px); overflow-y: auto; overscroll-behavior: contain; box-sizing: border-box; }
+  .app .viewport-tool-palette > * { flex-shrink: 0; }
+  .app .activity-bar { width: 44px; flex-shrink: 0; overflow-y: auto; }
+  .app .activity-bar-item { min-height: 44px; }
+  .app .status-bar { font-size: 10px; overflow: hidden; }
+  .app .bottom-panel-tabs, .app .tab-bar { overflow-x: auto; flex-shrink: 0; }
+  .app .bottom-panel-tabs button { min-height: 40px; flex-shrink: 0; }
+  .app [role="treeitem"], .app .h3-listbox-tree .bp5-tree-node-content { -webkit-touch-callout: none; }
+  .menu-panel { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .menu-panel .menu-item { min-height: 40px; white-space: normal; box-sizing: border-box; }
+  .menu-panel .menu-item__label { white-space: normal; }
+  .menu-panel .menu-item__accel { display: none; }
+  .menu-panel .menu-item--has-submenu { flex-wrap: wrap; }
+  .menu-panel .menu-flyout { position: static; flex-basis: 100%; width: 100%; max-width: 100%; transform: none !important; margin: 4px 0; }
+  .menu-panel .menu-flyout > .menu-panel { min-width: 0; width: 100%; }
+  .ctx-menu-overlay .ctx-menu-pos { left: 6px !important; right: 6px; top: 10dvh !important; max-height: 80dvh; overflow-y: auto; }
+  .bp5-dialog { max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); margin: 8px 0; overflow: auto; }
+  .bp5-dialog .bp5-dialog-body { overflow: auto; }
+  .bp5-dialog input, .bp5-dialog select, .wasm-dialog input, .wasm-dialog select { font-size: 16px !important; }
+  .bp5-dialog .bp5-button, .bp5-dialog .h3-form-btn { min-height: 36px !important; }
+  .wasm-dialog { box-sizing: border-box; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow: auto; inset: 0; margin: auto; }
+  .wasm-render-window { width: calc(100vw - 12px); height: calc(100dvh - 12px); box-sizing: border-box; }
+  .wasm-notice { left: 8px; right: 8px; bottom: 8px; max-width: none; }
+}
+
+:root .bp5-button[data-label-collapsed] .bp5-button-text { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
