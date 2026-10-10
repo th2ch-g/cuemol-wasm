@@ -23,13 +23,13 @@ The first visit reloads once to enable WebAssembly threads on GitHub Pages. A cu
 
 ## Browser scope
 
-The port retains the upstream molecular, surface, crystallographic, density, animation, and trajectory modules, including FFTW, XZ compression, and Little CMS. The small CueMol source patches enable its existing graphics peer binding under Emscripten and make the native-only OIDN dependency optional for this build. Browser integration and compatibility adaptations live in this repository.
+The port retains the upstream molecular, surface, crystallographic, density, animation, and trajectory modules, including FFTW, XZ compression, and Little CMS. The CueMol source patches enable graphics peer binding under Emscripten, make OIDN optional, report allocation failures, and repair atom deletion Undo/Redo. Browser integration and compatibility adaptations live in this repository.
 
 Native external programs cannot run inside this page. POV-Ray/APBS/FFmpeg execution, Python embedding, desktop window management, and the local MCP server/OS keychain integrations are unavailable. Umbreon still images, WebGL PNG export, and viewport recording run in the browser. POV-Ray scene export remains available for desktop rendering. The browser plugin registry omits the native agent and MCP integrations.
 
 Umbreon uses four rendering threads and the built-in A-trous denoiser. Intel OIDN is not included; saved OIDN settings are shown as A-trous in the browser rendering editor. The rendering window offers still images; the separate WebM command records viewport animations. CueMol source follows the selected release, while Umbreon, Embree, and oneTBB are pinned with archive checksums in `upstream.json`.
 
-This uses CueMol's current Tritium interface, which differs from the legacy XUL interface. Features already marked experimental upstream, including the console and trajectory UI, retain that status. Large maps, structures, and trajectories are constrained by browser memory and the 2 GiB WebAssembly memory limit.
+This uses CueMol's current Tritium interface, which differs from the legacy XUL interface. Features already marked experimental upstream, including the console and trajectory UI, retain that status. Large maps, structures, and trajectories are constrained by browser memory and the 4 GiB WebAssembly memory limit.
 
 ## Build locally
 
@@ -64,7 +64,7 @@ npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
-The tests serve the production build without COOP/COEP server headers, exercising the same service-worker isolation used on GitHub Pages. They check actual native parsing and rendering, PNG pixel data, camera interaction, context menus, selections, undo/redo, compressed QSC download and reload, browser persistence, molecule copy/paste, atom picking and distance labels, RCSB downloads, CCP4 maps, DCD frames, and video downloads. Ray-tracing checks cover real GI and NPR pixel output, transparent PNG downloads, render history, cancellation, and successful rendering after cancellation.
+The tests serve the production build without COOP/COEP server headers, exercising the same service-worker isolation used on GitHub Pages. They check actual native parsing and rendering, PNG pixel data, camera interaction, context menus, selections, undo/redo, compressed QSC download and reload, browser persistence, molecule copy/paste, atom picking and distance labels, RCSB downloads, CCP4 maps, DCD frames, and video downloads. Ray-tracing checks cover real GI and NPR pixel output, transparent PNG downloads, render history, cancellation, and successful rendering after cancellation. They include 8GNG ribbon rendering at the default 1200 × 1200 size with 3× supersampling, and consecutive GI/NPR/GI renders. Forced allocation-failure and recovery checks run in Chromium and Firefox; that fault-injection test is skipped in WebKit because the injected worker memory-growth failure is not reliable there. Additional checks exercise atom editing, LSQ/SSM superposition, merging, surface cutting, morph/animation playback, coordinate and geometry exports, console commands, sequence-panel selection, and style-file round trips.
 
 To test a deployed build, set `BASE_URL` to its application URL. Reports, exported images, and failure traces are written locally. Browser tests run outside GitHub Actions to conserve Actions minutes.
 

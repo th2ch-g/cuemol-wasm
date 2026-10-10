@@ -12,7 +12,8 @@ async function openFile(page: Page, path = pdb) {
   await page.getByRole('button', { name: 'Open File', exact: true }).click();
   await (await picker).setFiles(path);
   await page.getByRole('button', { name: 'Open', exact: true }).click();
-  await expect(page.getByText(/1crn \(MolCoord\)/i).first()).toBeVisible();
+  const objectName = path.split('/').pop()!.replace(/\.[^.]+$/, '').toLowerCase();
+  await expect(page.getByText(new RegExp('^' + objectName + ' \\(MolCoord\\)$', 'i')).first()).toBeVisible();
 }
 async function call(page: Page, name: string, args?: any) {
   return page.evaluate(({ name, args }) => (window as any).__cuemolHost.call(name, args), { name, args });
@@ -97,7 +98,7 @@ test('scene context menus, selections and undo/redo retain native state', async 
 
 test('compressed self-contained scene downloads, reloads and persists locally', async ({ page }, testInfo) => {
   await boot(page);
-  await openFile(page);
+  await openFile(page, '.cache/fixtures/8gng.cif');
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Save Scene', exact: true }).click();
   await page.getByLabel('File name', { exact: true }).fill('roundtrip.qsc');
@@ -123,7 +124,7 @@ test('compressed self-contained scene downloads, reloads and persists locally', 
   const objects = await call(page, 'listSceneObjects', state);
   expect(objects.objects).toHaveLength(1);
   expect((await call(page, 'listCameras', state)).cameras.map((camera: any) => camera.name)).toContain('saved-camera');
-  expect(await call(page, 'getSelHitCount', { ...state, molId: objects.objects[0].uid, selStr: '*' })).toEqual({ count: 327 });
+  expect(await call(page, 'getSelHitCount', { ...state, molId: objects.objects[0].uid, selStr: '*' })).toEqual({ count: 11322 });
   await fs(page, 'flush');
   page.on('dialog', dialog => dialog.accept());
   await page.reload();
@@ -270,16 +271,20 @@ test('picks atoms from the rendered image and creates a distance label', async (
 });
 
 
-test('PNG export downloads a rendered image', async ({ page }, testInfo) => {
+for (const exporter of [
+  { name: 'PNG', label: 'PNG image...', width: 640 },
+  { name: 'Umbreon', label: 'Umbreon ray-traced image...', width: 240 },
+]) {
+test(exporter.name + ' export downloads a rendered image', async ({ page }, testInfo) => {
   await boot(page);
   await openFile(page);
   await page.getByRole('menuitem', { name: 'Rendering', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Export scene', exact: true }).hover();
-  await page.getByRole('menuitem', { name: 'PNG image...', exact: true }).click();
+  await page.getByRole('menuitem', { name: exporter.label, exact: true }).click();
   await page.getByLabel('File name', { exact: true }).fill('viewport.png');
   await page.getByRole('dialog', { name: 'Save file', exact: true }).getByRole('button', { name: 'Save', exact: true }).click();
   const options = page.getByRole('dialog', { name: 'PNG options', exact: true });
-  await options.getByRole('spinbutton').first().fill('640');
+  await options.getByRole('spinbutton').first().fill(String(exporter.width));
   const downloaded = page.waitForEvent('download');
   await options.getByRole('button', { name: 'OK', exact: true }).click();
   const download = await downloaded;
@@ -288,9 +293,11 @@ test('PNG export downloads a rendered image', async ({ page }, testInfo) => {
   await download.saveAs(saved);
   const { readFile } = await import('node:fs/promises');
   const png = PNG.sync.read(await readFile(saved));
-  expect(png.width).toBe(640);
+  expect(png.width).toBe(exporter.width);
   expect(coloredPixels(png)).toBeGreaterThan(100);
 });
+
+}
 
 test('POV-Ray export includes geometry companion files in a ZIP', async ({ page }, testInfo) => {
   await boot(page);
@@ -414,4 +421,425 @@ test('Umbreon rendering can be cancelled and restarted without blocking the scen
   await frame.getByRole('button', { name: 'Start Render', exact: true }).click();
   await expect(frame.getByRole('img', { name: 'Render result', exact: true })).toBeVisible();
   await expect(frame.locator('.render-panel-status')).toContainText('Completed');
+});
+
+test('8GNG ribbon renders at the default 1200px GI and NPR quality and renders again', async ({ page }, testInfo) => {
+  test.slow();
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await boot(page);
+  await openFile(page, '.cache/fixtures/8gng.cif');
+  const state = await fs(page, 'state');
+  const tree = await call(page, 'getSceneTree', state);
+  const renderer = tree.tree.children.find((n: any) => n.type === 'object').children.find((n: any) => n.type === 'renderer');
+  expect(await call(page, 'changeRendererType', { ...state, rendId: renderer.id, newType: 'ribbon' })).toMatchObject({ ok: true });
+  await page.getByRole('button', { name: 'Render', exact: true }).click();
+  const frame = page.frameLocator('iframe[title="Umbreon rendering"]');
+  await expect(frame.locator('html')).toHaveAttribute('data-app-ready', 'true');
+  await expect(frame.locator('.image-size-row input').first()).toHaveValue('1200');
+  const result = frame.getByRole('img', { name: 'Render result', exact: true });
+  let previous = '';
+  for (const [index, backend] of ['umbreon', 'umbreon_npr', 'umbreon'].entries()) {
+    await frame.locator('.render-panel-backend-select select').selectOption(backend);
+    await frame.getByRole('button', { name: 'Start Render', exact: true }).click();
+    await expect(frame.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+    await expect(frame.locator('.render-panel-status')).toContainText(/Completed|Error/, { timeout: 180000 });
+    await expect(frame.locator('.render-panel-status')).toContainText('Completed');
+    await expect(result).toBeVisible();
+    const source = (await result.getAttribute('src'))!;
+    expect(source).not.toBe(previous);
+    previous = source;
+    const data = Buffer.from(source.split(',')[1], 'base64');
+    const png = PNG.sync.read(data);
+    expect([png.width, png.height]).toEqual([1200, 1200]);
+    expect(png.data.some((value, i) => i % 4 !== 3 && value > 32)).toBe(true);
+    await expect(frame.locator('.render-panel')).toContainText('render 1200x1200 ss3 (grid 3600x3600)');
+    if (backend === 'umbreon') await expect(frame.locator('.render-panel')).toContainText('GI pt2 32spp');
+    await testInfo.attach(backend + '-' + index, { body: data, contentType: 'image/png' });
+  }
+  await expect(frame.locator('.rr-history-pos')).toHaveText('3 / 3');
+  await page.getByRole('button', { name: 'Close rendering', exact: true }).click();
+  expect((await call(page, 'getSceneTree', state)).tree).toBeTruthy();
+  expect(await call(page, 'exportScene', { ...state, filePath: '/work/after-large-render.png', exporterName: 'png', width: 640, height: 480 })).toMatchObject({ ok: true });
+  expect(coloredPixels(PNG.sync.read(await bytes(page, '/work/after-large-render.png')))).toBeGreaterThan(1000);
+  expect(errors).toEqual([]);
+});
+
+test('Umbreon reports a memory allocation failure and can render after it', async ({ page, browserName }) => {
+  test.skip(browserName === 'webkit', 'WebKit does not reliably trigger the injected worker memory-growth failure.');
+  await boot(page);
+  await openFile(page);
+  const state = await fs(page, 'state');
+  await call(page, 'setSceneRenderSettings', { sceneId: state.sceneId, values: {
+    backend: 'umbreon', width: 100, height: 100, 'umbreon.supersample': 1,
+  } });
+  await page.getByRole('button', { name: 'Render', exact: true }).click();
+  const frame = page.frameLocator('iframe[title="Umbreon rendering"]');
+  await expect(frame.locator('html')).toHaveAttribute('data-app-ready', 'true');
+  await frame.getByRole('button', { name: 'Start Render', exact: true }).click();
+  await expect(frame.locator('.render-panel-status')).toContainText('Completed');
+  await call(page, 'setSceneRenderSettings', { sceneId: state.sceneId, values: {
+    width: 600, height: 600, 'umbreon.supersample': 3,
+  } });
+  await expect(frame.locator('.image-size-row input').first()).toHaveValue('600');
+  await upload(page, '.cache/fixtures/8gng.cif', '/work/allocation.cif');
+  const loaded = await call(page, 'loadObject', {
+    ...state, filePath: '/work/allocation.cif', contentFirst: false,
+    options: { format: { kind: 'unknown', options: {} }, renderer: rendererOptions('allocation', 'cpk') },
+  });
+  expect(loaded, JSON.stringify(loaded)).toMatchObject({ ok: true });
+  const workers = page.workers();
+  expect(workers.length).toBeGreaterThan(0);
+  for (const worker of workers) await worker.evaluate(() => {
+    (globalThis as any).__savedMemoryGrow = WebAssembly.Memory.prototype.grow;
+    WebAssembly.Memory.prototype.grow = function () { throw new RangeError('Injected memory allocation failure'); };
+  });
+  await frame.getByRole('button', { name: 'Start Render', exact: true }).click();
+  await expect(frame.locator('.render-panel-status')).toContainText('Error');
+  await expect(frame.getByRole('alertdialog')).toContainText('WebAssembly memory allocation failed');
+  for (const worker of workers) await worker.evaluate(() => {
+    WebAssembly.Memory.prototype.grow = (globalThis as any).__savedMemoryGrow;
+    delete (globalThis as any).__savedMemoryGrow;
+  });
+  await frame.getByRole('button', { name: 'OK', exact: true }).click();
+  expect(await call(page, 'deleteNode', { ...state, nodeId: loaded.objId, nodeType: 'object' })).toMatchObject({ ok: true });
+  const remaining = (await call(page, 'listSceneObjects', state)).objects[0];
+  expect(await call(page, 'focusOnNode', { ...state, nodeId: remaining.uid, nodeType: 'object' })).toMatchObject({ ok: true });
+  await call(page, 'setSceneRenderSettings', { sceneId: state.sceneId, values: {
+    width: 100, height: 100, 'umbreon.supersample': 1,
+  } });
+  await expect(frame.locator('.image-size-row input').first()).toHaveValue('100');
+  await frame.getByRole('button', { name: 'Start Render', exact: true }).click();
+  await expect(frame.locator('.render-panel-status')).toContainText('Completed');
+  await expect(frame.getByRole('img', { name: 'Render result', exact: true })).toBeVisible();
+});
+
+async function loadedObject(page: Page) {
+  const state = await fs(page, 'state');
+  const object = (await call(page, 'listSceneObjects', state)).objects[0];
+  const tree = await call(page, 'getSceneTree', state);
+  const renderer = tree.tree.children.find((n: any) => n.type === 'object').children.find((n: any) => n.type === 'renderer');
+  return { state, object, renderer };
+}
+
+test('8GNG representations, selection, coloring, projection and camera files work together', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await boot(page);
+  await openFile(page, '.cache/fixtures/8gng.cif');
+  const { state, object, renderer } = await loadedObject(page);
+  expect(await call(page, 'getSelHitCount', { ...state, molId: object.uid, selStr: '*' })).toEqual({ count: 11322 });
+  expect(await call(page, 'focusOnNode', { ...state, nodeId: object.uid, nodeType: 'object' })).toMatchObject({ ok: true });
+  const hashes = new Set<string>();
+  const { createHash } = await import('node:crypto');
+  for (const type of ['simple', 'ribbon', 'cartoon', 'ballstick', 'cpk', 'dsurface']) {
+    if (type !== 'simple') {
+      const changed = await call(page, 'changeRendererType', { ...state, rendId: renderer.id, newType: type });
+      expect(changed.ok).toBe(true);
+      renderer.id = changed.newRendId;
+    }
+    const path = '/work/8gng-' + type + '.png';
+    expect(await call(page, 'exportScene', { ...state, filePath: path, exporterName: 'png', width: 640, height: 480 })).toMatchObject({ ok: true });
+    const data = await bytes(page, path);
+    expect(coloredPixels(PNG.sync.read(data))).toBeGreaterThan(1000);
+    hashes.add(createHash('sha256').update(data).digest('hex'));
+    await testInfo.attach(type, { body: data, contentType: 'image/png' });
+  }
+  expect(hashes.size).toBe(6);
+  expect(await call(page, 'applyMolSelString', { ...state, molId: object.uid, selStr: 'chain A and name CA' })).toMatchObject({ ok: true });
+  expect((await call(page, 'getSelHitCount', { ...state, molId: object.uid, selStr: 'chain A and name CA' })).count).toBeGreaterThan(100);
+  expect(await call(page, 'setRendererColoring', { ...state, rendId: renderer.id, coloringId: 'paint-type-rainbow' })).toMatchObject({ ok: true });
+  expect(await call(page, 'exportScene', { ...state, filePath: '/work/rainbow.png', exporterName: 'png', width: 640, height: 480 })).toMatchObject({ ok: true });
+  expect((await bytes(page, '/work/rainbow.png')).equals(await bytes(page, '/work/8gng-dsurface.png'))).toBe(false);
+  await page.getByRole('menuitem', { name: 'View', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: 'Perspective', exact: true }).click();
+  expect(await call(page, 'getViewProjection', state)).toMatchObject({ ok: true, perspective: true });
+  await page.getByRole('menuitem', { name: 'Scene', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Background', exact: true }).hover();
+  await page.getByRole('menuitemradio', { name: 'White', exact: true }).click();
+  expect(await call(page, 'createCamera', { ...state, name: '8gng-camera' })).toMatchObject({ ok: true });
+  expect(await call(page, 'saveViewToCamera', { ...state, name: '8gng-camera' })).toMatchObject({ ok: true });
+  const original = await call(page, 'getViewXform', state);
+  expect(await call(page, 'saveCameraToFile', { ...state, name: '8gng-camera', path: '/work/8gng.qcam' })).toMatchObject({ ok: true });
+  expect((await bytes(page, '/work/8gng.qcam')).length).toBeGreaterThan(100);
+  expect(await call(page, 'setViewXform', { ...state, zoom: original.zoom / 2 })).toMatchObject({ ok: true });
+  expect(await call(page, 'loadCameraFromFile', { ...state, path: '/work/8gng.qcam' })).toMatchObject({ ok: true });
+  expect((await call(page, 'getViewXform', state)).zoom).toBeCloseTo(original.zoom, 4);
+  expect(errors).toEqual([]);
+});
+
+test('molecule editing changes native atoms and supports undo and redo', async ({ page }) => {
+  await boot(page);
+  await openFile(page);
+  const { state, object } = await loadedObject(page);
+  const target = { ...state, objId: object.uid };
+  const count = (selStr: string) => call(page, 'getSelHitCount', { ...state, molId: object.uid, selStr }).then(result => result.count);
+  expect(await call(page, 'changeChainName', { ...target, selStr: '*', chainName: 'X' })).toMatchObject({ ok: true });
+  expect(await count('chain X')).toBe(327);
+  expect(await call(page, 'changeResidueIndex', { ...target, selStr: '*', bshift: true, value: 100, renumber: false })).toMatchObject({ ok: true });
+  expect(await count('resi 101:146')).toBe(327);
+  expect(await call(page, 'deleteMolAtoms', { ...target, selStr: 'name CA' })).toMatchObject({ ok: true });
+  await expect.poll(() => count('*')).toBe(281);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(() => count('*')).toBe(327);
+  expect(await count('name CA')).toBe(46);
+  expect(await count('chain X and resi 101:146')).toBe(327);
+  await page.getByRole('button', { name: 'Redo', exact: true }).click();
+  await expect.poll(() => count('*')).toBe(281);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(() => count('*')).toBe(327);
+  const atoms = await call(page, 'getMolAtoms', { ...state, molId: object.uid, chainName: 'X', residueIndex: '101' });
+  const atomId = atoms.atoms.find((atom: any) => atom.name === 'CA').id;
+  expect(await count('aid ' + atomId)).toBe(1);
+  expect(await call(page, 'deleteMolAtoms', { ...target, selStr: 'aid ' + atomId })).toMatchObject({ ok: true });
+  expect(await count('*')).toBe(326);
+  expect(await call(page, 'undo', state)).toMatchObject({ ok: true });
+  expect(await count('*')).toBe(327);
+  expect(await call(page, 'redo', state)).toMatchObject({ ok: true });
+  expect(await count('*')).toBe(326);
+  expect(await call(page, 'undo', state)).toMatchObject({ ok: true });
+  expect(await count('name CA')).toBe(46);
+  expect(await call(page, 'reassignProt2ndry', { ...target, mode: 'recalc', ignBulge: false, helixGapAngle: 20 })).toMatchObject({ ok: true });
+  const interactions = await call(page, 'analyzeInteractions', { ...target, selStr: '*', useMol2: false, useSel2: false, minDist: 2.5, maxDist: 3.5, maxLabels: 100, hbondOnly: false, rendName: 'contacts' });
+  expect(interactions).toMatchObject({ ok: true });
+  expect(interactions.count).toBeGreaterThan(0);
+});
+
+test('surface generation and cutting produce a renderable native surface', async ({ page }, testInfo) => {
+  await boot(page);
+  await openFile(page);
+  const { state, object } = await loadedObject(page);
+  const surface = await call(page, 'makeMolSurf', { ...state, objId: object.uid, selStr: '*', surfName: 'protein-surface', density: 2, probeRadius: 1.4 });
+  expect(surface).toMatchObject({ ok: true, newObjName: 'protein-surface' });
+  expect((await call(page, 'listSceneObjects', state)).objects.some((entry: any) => entry.className === 'MolSurfObj')).toBe(true);
+  const exported = () => call(page, 'exportScene', { ...state, filePath: '/work/surface.png', exporterName: 'png', width: 640, height: 480 });
+  expect(await exported()).toMatchObject({ ok: true });
+  const before = await bytes(page, '/work/surface.png');
+  expect(coloredPixels(PNG.sync.read(before))).toBeGreaterThan(100);
+  const camera = await call(page, 'getViewXform', state);
+  expect(await call(page, 'setViewXform', { ...state, slab: 5 })).toMatchObject({ ok: true });
+  expect(await call(page, 'cutSurfByPlane', { ...state, objId: surface.newObjId, mode: 'full', density: 2 })).toMatchObject({ ok: true });
+  expect(await call(page, 'setViewXform', { ...state, slab: camera.slab })).toMatchObject({ ok: true });
+  expect(await exported()).toMatchObject({ ok: true });
+  const after = await bytes(page, '/work/surface.png');
+  expect(after.equals(before)).toBe(false);
+  await testInfo.attach('cut-surface', { body: after, contentType: 'image/png' });
+});
+
+test('morph frames and animation playback advance and can be paused and sought', async ({ page }) => {
+  await boot(page);
+  await openFile(page);
+  const { state, object } = await loadedObject(page);
+  const converted = await call(page, 'convertToMorphMol', { ...state, objId: object.uid });
+  expect(converted).toMatchObject({ ok: true });
+  const target = { ...state, objId: converted.morphObjId };
+  expect(await call(page, 'getMorphFrames', target)).toMatchObject({ ok: true, isMorphMol: true });
+  await upload(page, pdb, '/work/morph-frame.pdb');
+  expect(await call(page, 'addMorphFrameFromFile', { ...target, path: '/work/morph-frame.pdb', insertIndex: -1 })).toMatchObject({ ok: true });
+  expect((await call(page, 'getMorphFrames', target)).frames).toHaveLength(2);
+  const spin = await call(page, 'animAddElement', { ...state, type: 'SimpleSpin' });
+  expect(spin).toMatchObject({ ok: true });
+  expect(await call(page, 'animSetElementTime', { ...state, uid: spin.uid, startMs: 0, endMs: 5000 })).toMatchObject({ ok: true });
+  expect(await call(page, 'animPlay', state)).toMatchObject({ ok: true });
+  await expect.poll(async () => (await call(page, 'animGetMgrState', state)).elapsedMs).toBeGreaterThan(200);
+  const paused = await call(page, 'animPause', state);
+  expect(paused).toMatchObject({ ok: true, mgr: { playState: 'pause' } });
+  await page.waitForTimeout(200);
+  expect((await call(page, 'animGetMgrState', state)).elapsedMs).toBe(paused.mgr.elapsedMs);
+  expect(await call(page, 'animGoTime', { ...state, ms: 2500 })).toMatchObject({ ok: true, mgr: { elapsedMs: 2500 } });
+  expect(await call(page, 'animStop', state)).toMatchObject({ ok: true, mgr: { playState: 'stop' } });
+});
+
+test('all molecule tool dialogs open from their menus without runtime errors', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await boot(page);
+  await openFile(page);
+  for (const [menu, entries] of [
+    ['Edit', ['Merge molecule...', 'Delete mol atoms...', 'Change chain ID...', 'Change residue number...']],
+    ['Tools', ['Molecular superposition...', 'Interaction...', 'Reassign secondary str...', 'Mol morphing animation...', 'Mol surface generation...', 'Mol surface cutter...']],
+  ] as const) {
+    for (const name of entries) {
+      await page.getByRole('menuitem', { name: menu, exact: true }).click();
+      await page.getByRole('menuitem', { name, exact: true }).click();
+      const dialog = page.getByRole('dialog').last();
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: /^(Cancel|Close)$/ }).click();
+      await expect(dialog).not.toBeVisible();
+    }
+  }
+  await page.getByRole('menuitem', { name: 'Help', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^About / }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('object coordinate formats and geometry exports preserve real molecular data', async ({ page }, testInfo) => {
+  await boot(page);
+  await openFile(page);
+  const { state, object, renderer } = await loadedObject(page);
+  await page.getByText(/1crn \(MolCoord\)/i).first().click();
+  await page.getByRole('button', { name: 'Save Object', exact: true }).click();
+  await page.getByLabel('File name', { exact: true }).fill('coordinates.pdb');
+  const pending = page.waitForEvent('download');
+  await page.getByRole('dialog', { name: 'Save file', exact: true }).getByRole('button', { name: 'Save', exact: true }).click();
+  const download = await pending;
+  expect(download.suggestedFilename()).toBe('coordinates.pdb');
+  const saved = testInfo.outputPath('coordinates.pdb');
+  await download.saveAs(saved);
+  const { readFile } = await import('node:fs/promises');
+  expect((await readFile(saved, 'utf8')).split('\n').filter(line => /^(ATOM  |HETATM)/.test(line))).toHaveLength(327);
+  const writers = await call(page, 'getObjectSaveInfo', { ...state, objId: object.uid });
+  expect(writers.ok).toBe(true);
+  for (const writer of writers.filters) {
+    const path = '/work/roundtrip.' + writer.extensions[0];
+    expect(await call(page, 'saveObjectToFile', { ...state, objId: object.uid, writerName: writer.name, path })).toMatchObject({ ok: true });
+    expect((await bytes(page, path)).length).toBeGreaterThan(100);
+    if (writer.name === 'pqr' || writer.name === 'xyzr') {
+      const lines = (await bytes(page, path)).toString().trim().split('\n');
+      expect(lines).toHaveLength(327);
+      for (const line of lines) {
+        const fields = line.trim().split(/\s+/);
+        const values = fields.slice(writer.name === 'pqr' ? -5 : -4).map(Number);
+        expect(values.every(Number.isFinite)).toBe(true);
+        expect(values.at(-1)).toBeGreaterThan(0);
+      }
+      continue;
+    }
+    const loaded = await call(page, 'loadObject', {
+      ...state, filePath: path, contentFirst: true,
+      options: { format: { kind: 'unknown', options: {} }, renderer: rendererOptions('roundtrip-' + writer.name, 'simple') },
+    });
+    expect(loaded, JSON.stringify(loaded)).toMatchObject({ ok: true });
+    const mol = (await call(page, 'listSceneObjects', state)).objects.find((entry: any) => entry.name === 'roundtrip-' + writer.name);
+    expect(mol).toBeTruthy();
+    expect(await call(page, 'getSelHitCount', { ...state, molId: mol.uid, selStr: '*' })).toEqual({ count: 327 });
+    expect(await call(page, 'deleteNode', { ...state, nodeId: mol.uid, nodeType: 'object' })).toMatchObject({ ok: true });
+  }
+  expect(await call(page, 'changeRendererType', { ...state, rendId: renderer.id, newType: 'cartoon' })).toMatchObject({ ok: true });
+  for (const [label, filename] of [['STL...', 'protein.stl'], ['Metasequoia (MQO)...', 'protein.mqo']] as const) {
+    await page.getByRole('menuitem', { name: 'Rendering', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Export scene', exact: true }).hover();
+    await page.getByRole('menuitem', { name: label, exact: true }).click();
+    await page.getByLabel('File name', { exact: true }).fill(filename);
+    const pending = page.waitForEvent('download');
+    await page.getByRole('dialog', { name: 'Save file', exact: true }).getByRole('button', { name: 'Save', exact: true }).click();
+    const download = await pending;
+    expect(download.suggestedFilename()).toBe(filename);
+    const path = testInfo.outputPath(filename);
+    await download.saveAs(path);
+    const data = await readFile(path);
+    expect(data.length).toBeGreaterThan(10000);
+    if (filename.endsWith('.mqo')) expect(data.toString()).toContain('Metasequoia Document');
+    else expect(data.length).toBe(84 + data.readUInt32LE(80) * 50);
+  }
+});
+
+test('LSQ and SSM superposition align shifted coordinates and molecule merge retains atoms', async ({ page }) => {
+  await boot(page);
+  await openFile(page);
+  const { state, object } = await loadedObject(page);
+  const { readFile } = await import('node:fs/promises');
+  const original = await readFile(pdb, 'utf8');
+  const shifted = original.split('\n').map(line => {
+    if (!/^(ATOM  |HETATM)/.test(line)) return line;
+    const xyz = [30, 38, 46].map((start, axis) => (Number(line.slice(start, start + 8)) + [10, 5, -3][axis]).toFixed(3).padStart(8)).join('');
+    return line.slice(0, 30) + xyz + line.slice(54);
+  }).join('\n');
+  await fs(page, 'write', { path: '/work/shifted.pdb', data: Array.from(Buffer.from(shifted)) });
+  const coords = (data: string) => data.split('\n').filter(line => /^ATOM  /.test(line)).map(line => [30, 38, 46].map(start => Number(line.slice(start, start + 8))));
+  const reference = coords(original);
+  let movingId = 0;
+  for (const algo of ['LSQ', 'SSM']) {
+    expect(await call(page, 'loadObject', {
+      ...state, filePath: '/work/shifted.pdb', readerName: 'pdb', contentFirst: false,
+      options: { format: { kind: 'unknown', options: {} }, renderer: rendererOptions('shifted-' + algo, 'simple') },
+    })).toMatchObject({ ok: true });
+    movingId = (await call(page, 'listSceneObjects', state)).objects.find((entry: any) => entry.name === 'shifted-' + algo).uid;
+    const selection = algo === 'SSM' ? '*' : 'name CA';
+    const alignedResult = await call(page, 'superposeMol', { ...state, algo, refObjId: object.uid, refSel: selection, movObjId: movingId, movSel: selection, useprop: false, autoRecenter: true });
+    expect(alignedResult, JSON.stringify(alignedResult)).toMatchObject({ ok: true });
+    expect(await call(page, 'saveObjectToFile', { ...state, objId: movingId, writerName: 'pdb', path: '/work/aligned.pdb' })).toMatchObject({ ok: true });
+    const aligned = coords((await bytes(page, '/work/aligned.pdb')).toString());
+    expect(aligned).toHaveLength(reference.length);
+    const rmsd = Math.sqrt(aligned.reduce((sum, xyz, i) => sum + xyz.reduce((s, value, axis) => s + (value - reference[i][axis]) ** 2, 0), 0) / aligned.length);
+    expect(rmsd).toBeLessThan(0.005);
+  }
+  expect(await call(page, 'changeChainName', { ...state, objId: movingId, selStr: '*', chainName: 'X' })).toMatchObject({ ok: true });
+  expect(await call(page, 'mergeMol', { ...state, fromObjId: movingId, toObjId: object.uid, selStr: '*', copy: true })).toMatchObject({ ok: true });
+  expect(await call(page, 'getSelHitCount', { ...state, molId: object.uid, selStr: '*' })).toEqual({ count: 654 });
+  expect(await call(page, 'undo', state)).toMatchObject({ ok: true });
+  expect(await call(page, 'getSelHitCount', { ...state, molId: object.uid, selStr: '*' })).toEqual({ count: 327 });
+  expect(await call(page, 'redo', state)).toMatchObject({ ok: true });
+  expect(await call(page, 'getSelHitCount', { ...state, molId: object.uid, selStr: '*' })).toEqual({ count: 654 });
+});
+
+
+test('console commands change native representations and report atom counts', async ({ page }) => {
+  await boot(page);
+  await openFile(page);
+  await page.getByText('Console', { exact: true }).first().click();
+  const native = page.getByLabel('CueMol> command', { exact: true });
+  await native.fill('pymol');
+  await native.press('Enter');
+  const prompt = page.getByLabel('PyM> command', { exact: true });
+  await prompt.fill('count_atoms all');
+  await prompt.press('Enter');
+  await expect(page.getByText('count_atoms: 327 atoms', { exact: false })).toBeVisible();
+  await prompt.fill('as cartoon, all; color red, all; bg_color white');
+  await prompt.press('Enter');
+  const state = await fs(page, 'state');
+  await expect.poll(async () => JSON.stringify(await call(page, 'getSceneTree', state))).toContain('cartoon');
+  expect(await call(page, 'exportScene', { ...state, filePath: '/work/console.png', exporterName: 'png', width: 320, height: 240 })).toMatchObject({ ok: true });
+  const image = PNG.sync.read(await bytes(page, '/work/console.png'));
+  expect(coloredPixels(image)).toBeGreaterThan(100);
+  expect(Array.from(image.data.subarray(0, 3))).toEqual([255, 255, 255]);
+  await prompt.fill('count_atoms name CA');
+  await prompt.press('Enter');
+  await expect(page.getByText('count_atoms: 46 atoms', { exact: false })).toBeVisible();
+});
+
+test('custom style colors and selections survive file export and import', async ({ page }) => {
+  await boot(page);
+  await openFile(page);
+  const state = await fs(page, 'state');
+  const created = await call(page, 'createStyleSet', { ...state, name: 'test-style' });
+  expect(created).toMatchObject({ ok: true });
+  const target = { ...state, styleSetId: created.newId, scopeId: state.sceneId };
+  expect(await call(page, 'setStyleSetColor', { ...target, name: 'accent', colorStr: '#123456' })).toMatchObject({ ok: true });
+  expect(await call(page, 'setStyleSetSelection', { ...target, name: 'alpha', value: 'name CA' })).toMatchObject({ ok: true });
+  const before = await call(page, 'getStyleSetContents', target);
+  expect(before).toMatchObject({ ok: true, colors: [{ name: 'accent', hex: '#123456' }], selections: [{ name: 'alpha', value: 'name CA' }] });
+  expect(await call(page, 'saveStyleSetToFile', { ...target, path: '/work/custom-style.xml' })).toMatchObject({ ok: true });
+  const exported = (await bytes(page, '/work/custom-style.xml')).toString();
+  expect(exported).toContain('accent');
+  expect(exported).toContain('name CA');
+  expect(await call(page, 'destroyStyleSet', target)).toMatchObject({ ok: true });
+  const loaded = await call(page, 'loadStyleSetFromFile', { ...state, path: '/work/custom-style.xml' });
+  expect(loaded).toMatchObject({ ok: true });
+  const after = await call(page, 'getStyleSetContents', { styleSetId: loaded.newId });
+  expect(after).toMatchObject({ ok: true, colors: before.colors, selections: before.selections, readonly: true });
+});
+
+
+test('sequence clicks and range selection update native residue selections', async ({ page }) => {
+  await boot(page);
+  await openFile(page);
+  const { state, object } = await loadedObject(page);
+  const chain = (await call(page, 'getMolChains', { ...state, molId: object.uid })).chains[0].name;
+  const residues = () => call(page, 'getMolResidues', { ...state, molId: object.uid, chainName: chain }).then(result => result.residues);
+  expect(await residues()).toHaveLength(46);
+  expect(await call(page, 'selectObjectMol', { ...state, objId: object.uid, kind: 'unselect' })).toMatchObject({ ok: true });
+  await page.getByText('Sequence', { exact: true }).first().click();
+  const canvas = page.locator('.seq-canvas');
+  await expect(canvas).toBeVisible();
+  const width = await canvas.evaluate(element => element.getBoundingClientRect().width / 56);
+  const height = await page.locator('.seq-name-item').first().evaluate(element => element.getBoundingClientRect().height);
+  await canvas.click({ position: { x: width * 1.5, y: height / 2 } });
+  await expect.poll(async () => (await residues()).filter((residue: any) => residue.sel).map((residue: any) => residue.index)).toEqual(['1']);
+  await canvas.click({ position: { x: width * 5.5, y: height / 2 }, modifiers: ['Shift'] });
+  await expect.poll(async () => (await residues()).filter((residue: any) => residue.sel).map((residue: any) => residue.index)).toEqual(['1', '2', '3', '4', '5']);
+  await canvas.click({ position: { x: width * 1.5, y: height / 2 }, button: 'right' });
+  await page.getByRole('menuitem', { name: 'Unselect all', exact: true }).click();
+  await expect.poll(async () => (await residues()).filter((residue: any) => residue.sel).length).toBe(0);
 });

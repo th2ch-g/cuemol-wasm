@@ -1,0 +1,24 @@
+diff --git a/src/libcuemol2_api/binding.cpp b/src/libcuemol2_api/binding.cpp
+index 6480fc9..34c37c7 100644
+--- a/src/libcuemol2_api/binding.cpp
++++ b/src/libcuemol2_api/binding.cpp
+@@ -2,2 +2,4 @@
+ #include <common.h>
++#include <exception>
++#include <new>
+
+@@ -265,2 +267,14 @@ namespace cuemol2 {
+     }
++#ifdef __EMSCRIPTEN__
++    catch (const std::bad_alloc &) {
++      errmsg = "WebAssembly memory allocation failed. "
++               "Reduce the image size or supersampling and try again.";
++      return false;
++    }
++    catch (const std::exception &e) {
++      errmsg = LString::format("Exception in native method \"%s\": %s",
++                              mthnm.c_str(), e.what());
++      return false;
++    }
++#endif
+     catch (...) {

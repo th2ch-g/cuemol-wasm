@@ -45,6 +45,7 @@ function browserAdapter() {
       if (id.endsWith('/commands/useRenderCommands.ts')) return readFileSync(resolve(root, 'src/browser/render-commands.ts'), 'utf8').replace("'./recording'", JSON.stringify(resolve(root, 'src/browser/recording.ts')));
       if (id.endsWith('/features/render/renderwindow/RenderWindowApp.tsx')) return adapt(code, id, [
         ['? RENDER_BACKEND_IDS', '? RENDER_BACKEND_IDS.filter(id => id !== "povray")'],
+        ['const canRender = client.target !== null;', 'const canRender = client.target !== null && sync.loaded && !sync.loading;'],
       ]);
       if (id.endsWith('/data/renderBackends.ts')) return adapt(code, id, [
         ['options: ["OIDN", "A-trous", "None"]', 'options: ["A-trous", "None"]'],

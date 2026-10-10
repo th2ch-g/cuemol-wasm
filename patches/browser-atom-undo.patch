@@ -1,0 +1,44 @@
+diff --git a/src/modules/molstr/MolCoord.hpp b/src/modules/molstr/MolCoord.hpp
+index dc0acbe..a3ed56b 100644
+--- a/src/modules/molstr/MolCoord.hpp
++++ b/src/modules/molstr/MolCoord.hpp
+@@ -366,3 +366,3 @@ namespace molstr {
+     /// Copy the selected part of pmol2 into this mol (inv. op. of deleteSel())
+-    bool copyAtoms(MolCoordPtr pmol2, SelectionPtr psel2);
++    bool copyAtoms(MolCoordPtr pmol2, SelectionPtr psel2, bool allowExistingResidues = false);
+
+diff --git a/src/modules/molstr/MolCoordGeomImpl.cpp b/src/modules/molstr/MolCoordGeomImpl.cpp
+index a7d1c99..f83eca4 100755
+--- a/src/modules/molstr/MolCoordGeomImpl.cpp
++++ b/src/modules/molstr/MolCoordGeomImpl.cpp
+@@ -476,2 +476,6 @@ namespace {
+       m_pMol2->copyAtoms(MolCoordPtr(pMol1), pSel);
++      m_copyAtomIDs.clear();
++      AtomIterator iter(m_pMol2);
++      for (iter.first(); iter.hasMore(); iter.next())
++        m_copyAtomIDs.push_back(m_pMol2->toStrAID(iter.getID()));
+     }
+@@ -520,4 +524,4 @@ namespace {
+       else {
+-        // undo of delete --> copy pmol <-- (m_pMol2, m_pSel)
+-        bOK = pmol->copyAtoms(m_pMol2, m_pSel);
++        // The backup contains only deleted atoms, including partial residues.
++        bOK = pmol->copyAtoms(m_pMol2, SelectionPtr(), true);
+       }
+@@ -550,4 +554,4 @@ namespace {
+       else {
+-        // redo of delete
+-        bOK = pmol->deleteAtoms(m_pSel);
++        // Atom IDs change when Undo restores atoms.
++        deleteAtoms(pmol);
+       }
+@@ -577,3 +581,3 @@ namespace {
+ ///  Copy will fail and return false, if there is name collision (in chain, res, atom).
+-bool MolCoord::copyAtoms(MolCoordPtr pmol2, SelectionPtr psel2)
++bool MolCoord::copyAtoms(MolCoordPtr pmol2, SelectionPtr psel2, bool allowExistingResidues)
+ {
+@@ -592,3 +596,3 @@ bool MolCoord::copyAtoms(MolCoordPtr pmol2, SelectionPtr psel2)
+     const LString &cname = pAtom->getChainName();
+-    if (!getResidue(cname, nresid).isnull())
++    if (!allowExistingResidues && !getResidue(cname, nresid).isnull())
+       return false;

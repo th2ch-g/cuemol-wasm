@@ -1,4 +1,6 @@
+import hashlib
 import math
+import subprocess
 import statistics
 import struct
 from pathlib import Path
@@ -40,3 +42,12 @@ header[212:216] = b"DA\x00\x00"
 struct.pack_into("<fi", header, 216, statistics.pstdev(density), 1)
 header[224:304] = b"Synthetic Gaussian density for browser integration tests".ljust(80)
 (output / "density.map").write_bytes(header + struct.pack(f"<{len(density)}f", *density))
+
+structure = output / "8gng.cif"
+if not structure.exists():
+    subprocess.run([
+        "curl", "--fail", "--location", "--silent", "--show-error", "--retry", "3",
+        "https://files.rcsb.org/download/8GNG.cif", "--output", str(structure),
+    ], check=True)
+if hashlib.sha256(structure.read_bytes()).hexdigest() != "a30bd41a969241c0c8512b1241df37bc43c088af2ad6a08f0b8c8308385fd41f":
+    raise SystemExit("8GNG fixture checksum changed; review the source before updating it.")
