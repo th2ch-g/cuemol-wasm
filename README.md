@@ -41,10 +41,10 @@ npm run build
 npm run preview
 ```
 
-The default local build uses the tested CueMol commit in `upstream.json`. To select another revision:
+The default local build resolves GitHub Releases **Latest** at the start of the build, then checks out that exact release tag. It excludes drafts and prereleases and fails if release resolution fails. To reproduce an earlier deployment, use its tag or commit from `version.json`:
 
 ```sh
-uv run --no-project --python 3.12 python scripts/bootstrap.py --upstream-ref develop
+uv run --no-project --python 3.12 python scripts/bootstrap.py --upstream-ref 'RELEASE_TAG_OR_COMMIT'
 bash scripts/build-deps.sh
 bash scripts/build-wasm.sh
 npm run build
@@ -70,14 +70,14 @@ To test a deployed build, set `BASE_URL` to its application URL. Reports, export
 There are no scheduled or push-triggered deployments.
 
 1. Open **Actions → Build and deploy CueMol Wasm → Run workflow**.
-2. Enter a CueMol branch, tag, or commit. The default `develop` resolves the latest upstream commit at the start of that run.
+2. Keep `upstream_ref` as `latest` to use GitHub Releases **Latest**, or enter a specific tag or commit. The workflow resolves the release once and builds the source at that tag, rather than the release's target branch.
 3. The workflow builds the native engine and UI and deploys the artifact to GitHub Pages. It does not install test browsers or run tests.
-4. Run `node scripts/check-deployment.mjs` and `npm run test:e2e` locally with `BASE_URL` set to the published application URL. Set `EXPECTED_COMMIT` and `EXPECTED_UPSTREAM` when checking a specific deployment.
+4. Run `node scripts/check-deployment.mjs` and `npm run test:e2e` locally with `BASE_URL` set to the published application URL. Set `EXPECTED_COMMIT` and `EXPECTED_UPSTREAM` to the expected commits; optionally set `EXPECTED_RELEASE` to check the release tag too.
 
 The workflow caches the compiled Wasm engine and generated TypeScript wrappers by CueMol commit, build configuration, compiler/dependency versions, and native patches. An exact match skips Emscripten setup and C++ compilation; build metadata and runtime data are still regenerated for the current adapter commit. Upstream changes reuse the SDK, downloaded sources, compiled dependency libraries, and ccache. npm downloads are cached by the lockfile. Cache expiration falls back to a complete build.
 
 A failed build leaves the current site in place. The workflow fails if the upstream patch no longer applies. Review compatibility changes before retrying an upstream update.
 
-[version.json](https://th2ch-g.github.io/cuemol-wasm/version.json) identifies the deployed commits and native binary. [source.json](https://th2ch-g.github.io/cuemol-wasm/source.json) provides the exact source archives and dependency checksums. Native binaries and runtime data use content-addressed URLs to avoid mixing old and new files across updates.
+[version.json](https://th2ch-g.github.io/cuemol-wasm/version.json) identifies the resolved release tag, release URL, deployed commits, and native binary. [source.json](https://th2ch-g.github.io/cuemol-wasm/source.json) provides the exact source archives and dependency checksums. Native binaries and runtime data use content-addressed URLs to avoid mixing old and new files across updates.
 
 See [THIRD_PARTY.md](THIRD_PARTY.md) for source and license information.

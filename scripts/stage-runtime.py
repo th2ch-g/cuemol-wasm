@@ -8,6 +8,10 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
 upstream = root / ".cache/upstream"
+sha = subprocess.check_output(["git", "-C", str(upstream), "rev-parse", "HEAD"], text=True).strip()
+selection = json.loads((root / ".cache/upstream-source.json").read_text())
+if selection["commit"] != sha:
+    raise RuntimeError("CueMol source changed after resolution. Run bootstrap.py --source-only again.")
 public = root / "public"
 runtime = root / ".cache/runtime-stage"
 if runtime.exists():
@@ -56,10 +60,10 @@ wasm.mkdir(parents=True)
 for source in native_files:
     shutil.copy2(source, wasm / source.name)
 shutil.copy2(root / "node_modules/coi-serviceworker/coi-serviceworker.js", public / "coi-serviceworker.js")
-sha = subprocess.check_output(["git", "-C", str(upstream), "rev-parse", "HEAD"], text=True).strip()
 integration = subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip()
 version = {
     "upstream": sha, "repository": "CueMol/cuemol2", "integration": integration,
+    "upstreamRef": selection["resolvedRef"], "upstreamRelease": selection["release"],
     "builtAt": datetime.now(timezone.utc).isoformat(),
     "wasmSha256": wasm_hash, "wasmBase": wasm_base, "runtimeBase": runtime_base,
     "workflowRun": os.environ.get("GITHUB_RUN_ID"),
@@ -94,6 +98,7 @@ if (root / "THIRD_PARTY.md").exists():
 config = json.loads((root / "upstream.json").read_text())
 (public / "source.json").write_text(json.dumps({
     "upstream": f"https://github.com/CueMol/cuemol2/archive/{sha}.tar.gz",
+    "upstreamSelection": selection,
     "adapter": f"https://github.com/th2ch-g/cuemol-wasm/archive/{integration}.tar.gz",
     "dependencies": config["archives"],
     "emsdk": {"repository": "https://github.com/emscripten-core/emsdk", "commit": config["emsdkCommit"], "version": config["emsdk"]},

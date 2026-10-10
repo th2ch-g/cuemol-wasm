@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       upstream_ref:
-        description: CueMol branch, tag, or commit to build
+        description: Latest CueMol release (latest), tag, or commit to build
         required: true
-        default: develop
+        default: latest
         type: string
 
 permissions:
@@ -39,6 +39,7 @@ jobs:
         id: source
         env:
           UPSTREAM_REF: ${{ inputs.upstream_ref }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           uv run --no-project --python 3.12 python scripts/bootstrap.py --source-only --upstream-ref "$UPSTREAM_REF"
           printf 'upstream_sha=%s\n' "$(git -C .cache/upstream rev-parse HEAD)" >> "$GITHUB_OUTPUT"

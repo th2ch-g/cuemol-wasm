@@ -1,10 +1,9 @@
 {
   "repository": "https://github.com/CueMol/cuemol2.git",
-  "ref": "167dd81019bf6b8928e9c9e0d99009dfcf17b986",
+  "ref": "latest",
   "emsdk": "4.0.23",
   "boost": "1.84.0",
   "cgal": "6.1",
-  "updateRef": "develop",
   "emsdkCommit": "35ff8a6d150541276abbc6bae512ca90bcfbe220",
   "archives": [
     {
