@@ -1,3 +1,4 @@
+import { createRenderHost } from './render-host';
 import { IPC } from '@shared/ipcChannels';
 import { chooseSaveName } from './file-dialogs';
 import { zipSync } from 'fflate';
@@ -157,7 +158,9 @@ async function call(name: string, ...args: any[]): Promise<any> {
     post!([name, id, ...args]);
   });
 }
+const renderHost = createRenderHost({ emit, rpc, download });
 async function invoke(channel: string, arg?: any): Promise<any> {
+  if (channel.startsWith("render-window:")) return renderHost.invoke(channel, arg);
   switch (channel) {
     case IPC.APP_PATH: return {
       appPath: '/cuemol', exePath: '', modulePath: '/cuemol', isPackaged: true,
@@ -213,7 +216,6 @@ async function invoke(channel: string, arg?: any): Promise<any> {
     case IPC.LOCAL_API_STATUS:
     case IPC.LOCAL_API_CONTROL: return { listening: false, port: 0, endpoints: [], token: '', error: null, infoFile: '' };
     case IPC.LOCAL_API_CLI_ACCESS: return false;
-    case IPC.RENDER_WINDOW_OPEN: emit(IPC.MENU_EXPORT_PNG); return;
     case IPC.CRASH_REPORT: console.error('CueMol error:', arg); return;
     case IPC.FORCE_QUIT: location.reload(); return;
     case IPC.MENU_UPDATE_STATE:

@@ -39,12 +39,21 @@ function browserAdapter() {
         ["canvas.getContext('webgl2', { antialias: false })", "canvas.getContext('webgl2', { antialias: false, stencil: true })"],
       ]);
       if (id.endsWith('/shell/Toolbar.tsx')) return adapt(code, id, [
-        ['text: "Save As"', 'text: "Save Object"'], ['text: "Render"', 'text: "Export PNG"'],
+        ['text: "Save As"', 'text: "Save Object"'],
       ]);
       if (id === resolve(upstream, 'react-gui/src/plugins/index.ts')) return readFileSync(resolve(root, 'src/browser/plugins.ts'), 'utf8');
       if (id.endsWith('/commands/useRenderCommands.ts')) return readFileSync(resolve(root, 'src/browser/render-commands.ts'), 'utf8').replace("'./recording'", JSON.stringify(resolve(root, 'src/browser/recording.ts')));
+      if (id.endsWith('/features/render/renderwindow/RenderWindowApp.tsx')) return adapt(code, id, [
+        ['? RENDER_BACKEND_IDS', '? RENDER_BACKEND_IDS.filter(id => id !== "povray")'],
+      ]);
+      if (id.endsWith('/data/renderBackends.ts')) return adapt(code, id, [
+        ['options: ["OIDN", "A-trous", "None"]', 'options: ["A-trous", "None"]'],
+      ]);
+      if (id.endsWith('/features/render/sceneRenderSettings.ts')) return adapt(code, id, [
+        ['const rawBackend = values.backend;', 'const rawBackend = values.backend === "povray" ? "umbreon" : values.backend;'],
+      ]);
       if (id.endsWith('/shared/menuTemplate.ts')) return adapt(code, id, [
-        ["label: 'Image rendering...'", "label: 'Export image (WebGL)...'"],
+        ["label: 'Image rendering...'", "label: 'Ray tracing (Umbreon)...'"],
         ["label: 'Movie rendering...'", "label: 'Record viewport (WebM)...'"],
         [/^[ \t]*\{ id: 'apbs',.*\n/m, ''],
       ]);
@@ -102,7 +111,7 @@ export default defineConfig({
   plugins: [browserAdapter(), react()],
   resolve: { alias: aliases, dedupe: ['react', 'react-dom'] },
   define: { __DEV_UI__: 'false', 'process.env.NODE_ENV': '"production"' },
-  build: { outDir: 'dist', target: 'es2022', chunkSizeWarningLimit: 1800, rollupOptions: { input: { index: resolve(root, 'index.html') } } },
+  build: { outDir: 'dist', target: 'es2022', chunkSizeWarningLimit: 1800, rollupOptions: { input: { index: resolve(root, 'index.html'), render: resolve(root, 'render.html') } } },
   worker: { format: 'es', plugins: () => [browserAdapter()] },
   server: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },
   preview: { headers: { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' } },

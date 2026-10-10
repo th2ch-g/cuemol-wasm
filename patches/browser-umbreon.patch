@@ -1,0 +1,16 @@
+diff --git a/src/cmake/umbreon.cmake b/src/cmake/umbreon.cmake
+index f478afe..90ee316 100644
+--- a/src/cmake/umbreon.cmake
++++ b/src/cmake/umbreon.cmake
+@@ -17,7 +17,9 @@
+ # OpenImageDenoise target itself for the final link to resolve umbreon's OIDN
+ # symbols. Located via the -DOpenImageDenoise_DIR cache entry the build passes;
+ # its own Config runs find_dependency(TBB), resolving to the same bundled oneTBB.
+-find_package(OpenImageDenoise 2 CONFIG REQUIRED)
+-message(STATUS "OpenImageDenoise found (static): ${OpenImageDenoise_VERSION}")
++if(NOT EMSCRIPTEN)
++  find_package(OpenImageDenoise 2 CONFIG REQUIRED)
++  message(STATUS "OpenImageDenoise found (static): ${OpenImageDenoise_VERSION}")
++endif()
+
+ find_package(umbreon CONFIG REQUIRED)

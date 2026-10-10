@@ -10,6 +10,9 @@ The published [source manifest](https://th2ch-g.github.io/cuemol-wasm/source.jso
 | Emscripten | https://github.com/emscripten-core/emscripten | MIT / NCSA; bundled runtime notices apply |
 | emnapi | https://github.com/toyobayashi/emnapi | MIT |
 | node-addon-api | https://github.com/nodejs/node-addon-api | MIT |
+| Umbreon | https://github.com/CueMol/umbreon | No license file supplied in the pinned upstream revision; source provenance is recorded in source.json |
+| Embree | https://github.com/RenderKit/embree | Apache License 2.0 |
+| oneTBB | https://github.com/uxlfoundation/oneTBB | Apache License 2.0 |
 | Boost | https://www.boost.org/ | Boost Software License 1.0 |
 | CGAL | https://www.cgal.org/ | Package-specific GPL / LGPL; see the included license files |
 | FFTW | https://www.fftw.org/ | GPL 2 or later |

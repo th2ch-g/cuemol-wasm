@@ -270,10 +270,12 @@ test('picks atoms from the rendered image and creates a distance label', async (
 });
 
 
-test('toolbar PNG export downloads a rendered image', async ({ page }, testInfo) => {
+test('PNG export downloads a rendered image', async ({ page }, testInfo) => {
   await boot(page);
   await openFile(page);
-  await page.getByRole('button', { name: 'Export PNG', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Rendering', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Export scene', exact: true }).hover();
+  await page.getByRole('menuitem', { name: 'PNG image...', exact: true }).click();
   await page.getByLabel('File name', { exact: true }).fill('viewport.png');
   await page.getByRole('dialog', { name: 'Save file', exact: true }).getByRole('button', { name: 'Save', exact: true }).click();
   const options = page.getByRole('dialog', { name: 'PNG options', exact: true });
@@ -326,4 +328,90 @@ test('user display settings persist after a page reload', async ({ page }) => {
   await page.reload();
   await page.waitForFunction(() => document.documentElement.dataset.appReady === 'true');
   expect((await call(page, 'getLabelDefaults', {})).defaults.fontSize).toBe(19);
+});
+
+
+test('Umbreon ray tracing and NPR render real images, retain history and download PNG', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  await boot(page);
+  await openFile(page);
+  const state = await fs(page, 'state');
+  const tree = await call(page, 'getSceneTree', state);
+  const renderer = tree.tree.children.find((n: any) => n.type === 'object').children.find((n: any) => n.type === 'renderer');
+  expect(await call(page, 'changeRendererType', { ...state, rendId: renderer.id, newType: 'cpk' })).toMatchObject({ ok: true });
+  expect(await call(page, 'setSceneRenderSettings', { sceneId: state.sceneId, values: {
+    backend: 'umbreon', width: 300, height: 300, transparentBg: true,
+    'umbreon.supersample': 1, 'umbreon.useGI': true, 'umbreon.giSamples': 8,
+    'umbreon.denoise': 'A-trous', 'umbreon_npr.supersample': 1,
+  } })).toMatchObject({ ok: true });
+  await page.getByRole('button', { name: 'Render', exact: true }).click();
+  const frame = page.frameLocator('iframe[title="Umbreon rendering"]');
+  const start = frame.getByRole('button', { name: 'Start Render', exact: true });
+  await expect(start).toBeEnabled();
+  await expect(frame.locator('.image-size-row input').first()).toHaveValue('300');
+  await expect(frame.locator('.render-panel-backend-select select')).toHaveValue('umbreon');
+  await start.click();
+  const result = frame.getByRole('img', { name: 'Render result', exact: true });
+  await expect(result).toBeVisible();
+  await expect(frame.locator('.render-panel-status')).toContainText('Completed');
+  const giSource = (await result.getAttribute('src'))!;
+  const giData = Buffer.from(giSource.split(',')[1], 'base64');
+  const gi = PNG.sync.read(giData);
+  expect([gi.width, gi.height]).toEqual([300, 300]);
+  expect(coloredPixels(gi)).toBeGreaterThan(100);
+  expect(Array.from(gi.data).filter((value, index) => index % 4 === 3 && value === 0).length).toBeGreaterThan(100);
+  await expect(frame.locator('.render-panel')).toContainText('GI pt2');
+  await testInfo.attach('umbreon-gi', { body: giData, contentType: 'image/png' });
+  await frame.getByRole('button', { name: 'Save image', exact: true }).click();
+  await page.getByLabel('File name', { exact: true }).fill('umbreon.png');
+  const downloaded = page.waitForEvent('download');
+  await page.getByRole('dialog', { name: 'Save file', exact: true }).getByRole('button', { name: 'Save', exact: true }).click();
+  const download = await downloaded;
+  expect(download.suggestedFilename()).toBe('umbreon.png');
+  const saved = testInfo.outputPath('umbreon.png');
+  await download.saveAs(saved);
+  const { readFile } = await import('node:fs/promises');
+  expect((await readFile(saved)).equals(giData)).toBe(true);
+  await frame.locator('.render-panel-backend-select select').selectOption('umbreon_npr');
+  await start.click();
+  await expect(result).not.toHaveAttribute('src', giSource);
+  await expect(frame.locator('.render-panel-status')).toContainText('Completed');
+  const nprData = Buffer.from((await result.getAttribute('src'))!.split(',')[1], 'base64');
+  const npr = PNG.sync.read(nprData);
+  expect([npr.width, npr.height]).toEqual([300, 300]);
+  expect(nprData.equals(giData)).toBe(false);
+  expect(npr.data.some((value, index) => index % 4 === 3 && value > 0)).toBe(true);
+  await testInfo.attach('umbreon-npr', { body: nprData, contentType: 'image/png' });
+  await page.getByRole('button', { name: 'Close rendering', exact: true }).click();
+  await page.getByRole('button', { name: 'Render', exact: true }).click();
+  await expect(result).toBeVisible();
+  await expect(frame.locator('.rr-history-pos')).toHaveText('2 / 2');
+  expect(errors).toEqual([]);
+});
+
+test('Umbreon rendering can be cancelled and restarted without blocking the scene', async ({ page }) => {
+  await boot(page);
+  await openFile(page);
+  const state = await fs(page, 'state');
+  await call(page, 'setSceneRenderSettings', { sceneId: state.sceneId, values: {
+    backend: 'umbreon', width: 600, height: 600, 'umbreon.supersample': 4,
+    'umbreon.useGI': true, 'umbreon.giSamples': 256, 'umbreon.denoise': 'A-trous',
+  } });
+  await page.getByRole('menuitem', { name: 'Rendering', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Ray tracing (Umbreon)...', exact: true }).click();
+  const frame = page.frameLocator('iframe[title="Umbreon rendering"]');
+  await expect(frame.locator('.image-size-row input').first()).toHaveValue('600');
+  await frame.getByRole('button', { name: 'Start Render', exact: true }).click();
+  await frame.getByRole('button', { name: 'Stop', exact: true }).click();
+  await expect(frame.locator('.render-panel-status')).toContainText('Cancelled');
+  await expect.poll(() => call(page, 'getSceneTree', state)).toHaveProperty('tree');
+  await call(page, 'setSceneRenderSettings', { sceneId: state.sceneId, values: {
+    width: 100, height: 100, 'umbreon.supersample': 1, 'umbreon.giSamples': 8,
+  } });
+  await expect(frame.locator('.image-size-row input').first()).toHaveValue('100');
+  await frame.getByRole('button', { name: 'Start Render', exact: true }).click();
+  await expect(frame.getByRole('img', { name: 'Render result', exact: true })).toBeVisible();
+  await expect(frame.locator('.render-panel-status')).toContainText('Completed');
 });

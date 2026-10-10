@@ -3,7 +3,7 @@ CueMol-wasm inspired by https://github.com/yakomaxa/PyMOL-Wasm
 
 [Open CueMol Wasm](https://th2ch-g.github.io/cuemol-wasm/) · [Manual deployment workflow](https://github.com/th2ch-g/cuemol-wasm/actions/workflows/deploy.yml)
 
-CueMol's C++ molecular engine compiled to WebAssembly, with its upstream Tritium React interface and WebGL2 renderer. Structures, selections, surfaces, density calculations, and scene serialization run in the browser. This is a browser port of CueMol, not a replacement molecular viewer.
+CueMol's C++ molecular engine compiled to WebAssembly, with its upstream Tritium React interface and WebGL2 renderer. Umbreon and Embree provide CPU ray tracing through WebAssembly SIMD and threads. Structures, selections, surfaces, density calculations, and scene serialization run in the browser. This is a browser port of CueMol, not a replacement molecular viewer.
 
 ## Using the app
 
@@ -11,20 +11,23 @@ CueMol's C++ molecular engine compiled to WebAssembly, with its upstream Tritium
 - Right-click an object or renderer in the scene tree to change its representation, selection, coloring, visibility, or properties. Drag the viewport to rotate; use the mouse wheel to zoom.
 - **Save Object** downloads molecular coordinates. The save dialog offers the available output formats.
 - **Save Scene** downloads a CueMol QSC scene. Structure data is included by default, so the downloaded file can be reopened without the original PDB. XZ and gzip compression are available.
-- **Export PNG** renders an image with selectable dimensions and transparency. **Rendering → Record viewport** records the view as WebM while you rotate it or play an animation or trajectory.
+- **Render** or **Rendering → Ray tracing (Umbreon)** opens the upstream rendering settings and result viewer. Choose **Umbreon** for GI/AO/shadows or **Umbreon (NPR)** for ink-style drawing. Set image dimensions and transparency, press **Start Render**, then **Save image** to download the PNG. Rendering shows progress and can be stopped; completed images remain in the render history for this tab.
+- **Rendering → Export scene → PNG image** exports the WebGL viewport. **Rendering → Record viewport** records the view as WebM while you rotate it or play an animation or trajectory.
 - Scene exports that produce companion files, such as POV-Ray's include and label images, are downloaded together as a ZIP.
 - The **Trajectory** panel supports the upstream GRO topology and DCD/XTC/TRR workflow. Use **File → Open MD Trajectory** to select the files.
 - The **Console**, **Sequence**, **Animation**, camera, selection, property, and coloring tools reuse the upstream interface.
 
 Uploaded files and user styles stay in this browser's local storage. Opening a local file does not upload it to a server. Browser storage is not a backup: download QSC files for work you want to keep. Get PDB makes an explicit request to the selected public data provider.
 
-The first visit reloads once to enable WebAssembly threads on GitHub Pages. A current browser with WebGL2, OffscreenCanvas, SharedArrayBuffer, and service workers is required. The verification suite runs in Chromium, Firefox, and WebKit.
+The first visit reloads once to enable WebAssembly threads on GitHub Pages. A current browser with WebGL2, OffscreenCanvas, SharedArrayBuffer, WebAssembly SIMD, and service workers is required. The verification suite runs in Chromium, Firefox, and WebKit.
 
 ## Browser scope
 
-The port retains the upstream molecular, surface, crystallographic, density, animation, and trajectory modules, including FFTW, XZ compression, and Little CMS. The only patch to CueMol's source enables its existing graphics peer binding under Emscripten in two conditional guards. Browser integration and compatibility adaptations live in this repository.
+The port retains the upstream molecular, surface, crystallographic, density, animation, and trajectory modules, including FFTW, XZ compression, and Little CMS. The small CueMol source patches enable its existing graphics peer binding under Emscripten and make the native-only OIDN dependency optional for this build. Browser integration and compatibility adaptations live in this repository.
 
-Native external programs cannot run inside this page. POV-Ray/APBS/FFmpeg execution, Embree-based Umbreon rendering, Python embedding, desktop window management, and the local MCP server/OS keychain integrations are unavailable. PNG rendering and viewport recording use the browser, and POV-Ray scene export remains available for desktop rendering. The browser plugin registry omits the native agent and MCP integrations.
+Native external programs cannot run inside this page. POV-Ray/APBS/FFmpeg execution, Python embedding, desktop window management, and the local MCP server/OS keychain integrations are unavailable. Umbreon still images, WebGL PNG export, and viewport recording run in the browser. POV-Ray scene export remains available for desktop rendering. The browser plugin registry omits the native agent and MCP integrations.
+
+Umbreon uses four rendering threads and the built-in A-trous denoiser. Intel OIDN is not included; saved OIDN settings are shown as A-trous in the browser rendering editor. The rendering window offers still images; the separate WebM command records viewport animations. CueMol source follows the selected release, while Umbreon, Embree, and oneTBB are pinned with archive checksums in `upstream.json`.
 
 This uses CueMol's current Tritium interface, which differs from the legacy XUL interface. Features already marked experimental upstream, including the console and trajectory UI, retain that status. Large maps, structures, and trajectories are constrained by browser memory and the 2 GiB WebAssembly memory limit.
 
@@ -61,7 +64,7 @@ npx playwright install chromium firefox webkit
 npm run test:e2e
 ```
 
-The tests serve the production build without COOP/COEP server headers, exercising the same service-worker isolation used on GitHub Pages. They check actual native parsing and rendering, PNG pixel data, camera interaction, context menus, selections, undo/redo, compressed QSC download and reload, browser persistence, molecule copy/paste, atom picking and distance labels, RCSB downloads, CCP4 maps, DCD frames, and video downloads.
+The tests serve the production build without COOP/COEP server headers, exercising the same service-worker isolation used on GitHub Pages. They check actual native parsing and rendering, PNG pixel data, camera interaction, context menus, selections, undo/redo, compressed QSC download and reload, browser persistence, molecule copy/paste, atom picking and distance labels, RCSB downloads, CCP4 maps, DCD frames, and video downloads. Ray-tracing checks cover real GI and NPR pixel output, transparent PNG downloads, render history, cancellation, and successful rendering after cancellation.
 
 To test a deployed build, set `BASE_URL` to its application URL. Reports, exported images, and failure traces are written locally. Browser tests run outside GitHub Actions to conserve Actions minutes.
 

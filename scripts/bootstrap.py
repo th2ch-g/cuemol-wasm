@@ -52,18 +52,29 @@ if not args.dependencies_only:
         fetch_ref = f"refs/tags/{resolved_ref}"
         release = {"tag": resolved_ref, "url": latest["html_url"], "publishedAt": latest["published_at"]}
     upstream = cache / "upstream"
-    patch = root / "patches/browser-napi.patch"
+    patches = sorted((root / "patches").glob("*.patch"))
     if not (upstream / ".git").exists():
         run("git", "clone", "--no-checkout", "--filter=blob:none", config["repository"], str(upstream))
     else:
         diff = subprocess.check_output(["git", "diff", "--name-only"], cwd=upstream, text=True).strip()
         if diff:
-            run("git", "apply", "--reverse", "--check", str(patch), cwd=upstream)
-            run("git", "apply", "--reverse", str(patch), cwd=upstream)
+            for patch in reversed(patches):
+                def can_apply(*options):
+                    return subprocess.run(
+                        ["git", "apply", *options, "--check", str(patch)], cwd=upstream,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    ).returncode == 0
+                if can_apply("--reverse"):
+                    run("git", "apply", "--reverse", str(patch), cwd=upstream)
+                elif not can_apply():
+                    raise SystemExit(f"Cached source has incompatible edits: {patch.name}")
+            if subprocess.check_output(["git", "diff", "--name-only"], cwd=upstream, text=True).strip():
+                raise SystemExit("Cached CueMol source contains edits outside the browser patches.")
     run("git", "fetch", "--depth=1", "origin", fetch_ref, cwd=upstream)
     run("git", "checkout", "--detach", "FETCH_HEAD", cwd=upstream)
-    run("git", "apply", "--check", str(patch), cwd=upstream)
-    run("git", "apply", str(patch), cwd=upstream)
+    for patch in patches:
+        run("git", "apply", "--check", str(patch), cwd=upstream)
+        run("git", "apply", str(patch), cwd=upstream)
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=upstream, text=True).strip()
     selection = {"requestedRef": args.upstream_ref, "resolvedRef": resolved_ref, "commit": commit, "release": release}
     (cache / "upstream-source.json").write_text(json.dumps(selection, indent=2) + "\n")

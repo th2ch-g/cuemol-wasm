@@ -80,6 +80,9 @@ jobs:
             .cache/fftw
             .cache/xz
             .cache/lcms
+            .cache/tbb
+            .cache/embree
+            .cache/umbreon-install
           key: libraries-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.cache-keys.outputs.toolchain }}-${{ steps.cache-keys.outputs.sources }}-${{ hashFiles('scripts/build-deps.sh', 'scripts/build-env.sh', 'cmake/lcms/**') }}
       - name: Restore C++ compilation cache
         if: steps.engine-cache.outputs.cache-hit != 'true'

@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
+config = json.loads((root / "upstream.json").read_text())
 upstream = root / ".cache/upstream"
 sha = subprocess.check_output(["git", "-C", str(upstream), "rev-parse", "HEAD"], text=True).strip()
 selection = json.loads((root / ".cache/upstream-source.json").read_text())
@@ -67,6 +68,7 @@ version = {
     "builtAt": datetime.now(timezone.utc).isoformat(),
     "wasmSha256": wasm_hash, "wasmBase": wasm_base, "runtimeBase": runtime_base,
     "workflowRun": os.environ.get("GITHUB_RUN_ID"),
+    "rayTracing": {"backend": "umbreon", "commit": config["umbreon"], "embree": config["embree"], "tbb": config["tbb"], "denoiser": "a-trous", "threads": 4},
 }
 (public / "version.json").write_text(json.dumps(version, indent=2) + "\n")
 licenses = public / "licenses"
@@ -77,6 +79,8 @@ license_files = {
     "CGAL.txt": root / ".cache/deps/CGAL-6.1/LICENSE",
     "CGAL-GPL.txt": root / ".cache/deps/CGAL-6.1/LICENSE.GPL",
     "CGAL-LGPL.txt": root / ".cache/deps/CGAL-6.1/LICENSE.LGPL",
+    "Embree.txt": root / ".cache/deps/embree-4.4.1/LICENSE.txt",
+    "oneTBB.txt": root / ".cache/deps/oneTBB-2023.0.0/LICENSE.txt",
     "FFTW.txt": root / ".cache/deps/fftw-3.3.10/COPYING",
     "LCMS.txt": root / ".cache/deps/Little-CMS-lcms2.17/LICENSE",
     "Adapter.txt": root / "LICENSE",
@@ -95,7 +99,6 @@ for name, source in license_files.items():
     shutil.copy2(cached, licenses / name)
 if (root / "THIRD_PARTY.md").exists():
     shutil.copy2(root / "THIRD_PARTY.md", public / "THIRD_PARTY.md")
-config = json.loads((root / "upstream.json").read_text())
 (public / "source.json").write_text(json.dumps({
     "upstream": f"https://github.com/CueMol/cuemol2/archive/{sha}.tar.gz",
     "upstreamSelection": selection,

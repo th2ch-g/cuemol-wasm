@@ -10,6 +10,7 @@ export async function initializeCore(base: URL) {
     print: (message: string) => console.log(message),
     printErr: (message: string) => console.warn(message),
   });
+  wasm._cuemol_browser_init_rendering();
   const manifest = await fetch(new URL(version.runtimeBase + 'manifest.json', base)).then(r => {
     if (!r.ok) throw new Error('Runtime data could not be loaded.');
     return r.json();
